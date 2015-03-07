@@ -27,12 +27,6 @@ Aim:
   Your ADS API key must be stored in the file dev_key.txt in the
   current working directory when the tool is run.
 
-Issues:
-
-  It is not particularly clever if any record does not contain
-  all the desired fields, since this causes the program to exit,
-  rather than trying to do something like parse the records that
-  are correct.
 -}
 
 module Main where
@@ -46,9 +40,10 @@ import qualified System.IO.Strict as S
 
 import Control.Monad.State.Strict (evalStateT)
 
-import Data.Aeson (FromJSON(..), ToJSON(..), Value(..)
-                   , (.:), (.=)
-                   , json', object)
+import Data.Aeson (FromJSON(..)
+                   , Value(..)
+                   , (.:), (.:?)
+                   , json')
 
 import Options.Applicative
 
@@ -162,7 +157,7 @@ writeResponses odir json =
 
 -- Note: overwrites existing output
 writeResponse :: FilePath -> ADSEntity -> IO ()
-writeResponse odir (ADSEntity bibCode title abstract) = do
+writeResponse odir (ADSEntity bibCode title mabstract) = do
   let outHead = odir </> T.unpack bibCode
       
   T.putStrLn bibCode
@@ -172,8 +167,10 @@ writeResponse odir (ADSEntity bibCode title abstract) = do
        in T.writeFile fname cts
  
   writeIt "title" title
-  writeIt "abstract" abstract
-      
+  case mabstract of
+    Just abstract -> writeIt "abstract" abstract
+    _ -> putStrLn "  -- no abstract"
+  
 {-
 
 The ADS JSON response is expected to look like
@@ -202,25 +199,20 @@ Could look at the meta.count field and check not 0.
 
 -- | Represent a single abstract/record.
 --
+--   It appears that some abstracts can be missing
 data ADSEntity = ADSEntity {
     adsBibCode :: T.Text
     , adsTitle :: T.Text
-    , adsAbstract :: T.Text
+    , adsAbstract :: Maybe T.Text
     }
 
 instance FromJSON ADSEntity where
   parseJSON (Object o) = 
     ADSEntity <$> o .: "bibcode"
               <*> (head <$> o .: "title") -- assume first entry from the list
-              <*> o .: "abstract"
+              <*> o .:? "abstract"
   
   parseJSON _ = mzero
-
-instance ToJSON ADSEntity where
-  toJSON a = object [ "bibcode" .= adsBibCode a
-                    , "title" .= [adsTitle a]
-                    , "abstract" .= adsAbstract a
-                    ]
 
 -- | Extract all the data from an ADS response.
 --
