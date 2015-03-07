@@ -1,0 +1,58 @@
+name:           abstract
+Version:        0.0.0.1
+Stability:      experimental
+License:        PublicDomain
+Author:         Douglas Burke (dburke.gw@gmail.com)
+Maintainer:     dburke.gw@gmail.com
+Category:       Tools
+Synopsis:       What can we do with proposal abstracts?
+Description:
+  Grab successful proposal abstracts from the NASA ADS
+  and then do unspeakable Markov experiments with them.
+  .
+  Currently powers https://twitter.com/astroprop
+
+Tested-With:    GHC==7.8.4
+Cabal-Version:  >= 1.8
+Build-Type:     Simple
+
+Source-repository head
+  type:      git
+  location:  https://github.com/DougBurke/astroprop.git
+
+Executable getproposals    
+  Hs-Source-Dirs: app/
+  Main-Is:     GetProposals.hs
+
+  ghc-options: -Wall
+
+  Build-Depends:
+    aeson == 0.8.*
+    , base
+    , bytestring == 0.10.*
+    , directory == 1.2.*
+    , filepath == 1.3.*
+    , mtl >= 2.1 && < 2.3
+    , optparse-applicative == 0.11.*
+    , pipes == 4.1.*
+    , pipes-attoparsec == 0.5.*
+    , pipes-http == 1.0.*
+    , strict == 0.3.*
+    , text == 1.2.*
+
+Executable chain
+  Hs-Source-Dirs: app/
+  Main-Is:     Chain.hs
+
+  ghc-options: -Wall
+
+  Build-Depends:
+    base
+    , Glob == 0.7.*
+    , hashable == 1.2.*
+    , MonadRandom == 0.3.*
+    , optparse-applicative == 0.11.*
+    , random == 1.1.*
+    , text == 1.2.*
+    , unordered-containers == 0.2.*
+
