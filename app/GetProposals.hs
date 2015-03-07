@@ -2,6 +2,8 @@
 
 {-
 
+This code is placed in the Public Domain.
+
 Usage:
   getproposals <telescope id> <outdir>
      --start <start>

@@ -1,5 +1,7 @@
 {-
 
+This code is placed in the Public Domain.
+
 Usage:
 
   chain <file regexp>

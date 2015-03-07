@@ -78,8 +78,8 @@ Preprocessing executable 'chain' for abstract-0.0.0.1...
 Velocity Outflow in the Chandra Deep Fields
 ~~~~
 
-The `--seed` option can be used to specify a seed (and so fix the
-output).
+The `--seed` option can be used to specify a seed for the generator,
+rather than use the system time.
 
 # Building the tools
 
