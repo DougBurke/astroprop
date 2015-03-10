@@ -5,3 +5,4 @@ cabal.sandbox.config
 dist/
 cxo/
 hst/
+*.chain

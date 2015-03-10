@@ -23,7 +23,7 @@ stored in the file `dev_key.txt` (in the current working directory).
 
 ~~~~
 % cabal run getproposals -- -help
-Preprocessing executable 'getproposals' for abstract-0.0.0.1...
+Preprocessing executable 'getproposals' for abstract-0.0.0.2...
 getproposals - grab proposal abstracts and titles from ADS.
 
 Usage: getproposals telescope outdir [--start ARG] [--nrows ARG]
@@ -54,14 +54,18 @@ Once the data is written somewhere - e.g. after
 
     getproposals cxo..prop cxo
 
-then the `chain` program can be used to create the random text.
+then the `gibberish` program can be used to create the random text.
+This is useful for one-shot use; if you are going to want to create
+multiple outputs (or find you have to throw many of them away as
+they're not actually that funny), then the makechain and runchain
+executables, described below, can be used.
 
 ~~~~
-% cabal run chain -- --help
-Preprocessing executable 'chain' for abstract-0.0.0.1...
-chain - create a Markov chain of gibberish.
+% cabal run gibberish -- --help
+Preprocessing executable 'gibberish' for abstract-0.0.0.2...
+gibberish - create a Markov chain of gibberish.
 
-Usage: chain glob [--nchar ARG] [--seed ARG]
+Usage: gibberish glob [--nchar ARG] [--seed ARG]
   Create a Markov chain trained on the input data.
 
 Available options:
@@ -73,13 +77,41 @@ Available options:
 As an example, if `getproposals` were run with an `outdir` of `cxo`, then
 
 ~~~~
-% cabal run chain -- cxo/\*title
-Preprocessing executable 'chain' for abstract-0.0.0.1...
+% cabal run gibberish -- cxo/\*title
+Preprocessing executable 'gibberish' for abstract-0.0.0.2...
 Velocity Outflow in the Chandra Deep Fields
 ~~~~
 
 The `--seed` option can be used to specify a seed for the generator,
 rather than use the system time.
+
+# Repeated analysis
+
+The `makechain` executable will parse a set of text files, and create
+a chain file:
+
+~~~~
+% cabal run makechain -- cxo/\*title cxo.title.chain
+Preprocessing library abstract-0.0.0.2...
+In-place registering abstract-0.0.0.2...
+Preprocessing executable 'makechain' for abstract-0.0.0.2...
+Reading files: cxo/*title
+Writing chain: cxo.title.chain
+~~~~
+
+The `runchain` executable uses that chain file to create the
+gibberish:
+
+~~~~
+% cabal run runchain -- cxo.title.chain
+Preprocessing library abstract-0.0.0.2...
+In-place registering abstract-0.0.0.2...
+Preprocessing executable 'runchain' for abstract-0.0.0.2...
+Field of Magnetar Outbursts with the Aid of Lensing Clusters from the Sloan Digital Sky Survey
+~~~~
+
+It also accepts the same `--seed` and `--nchar` options as the
+`gibberish` executable.
 
 # Building the tools
 
