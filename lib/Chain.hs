@@ -30,6 +30,8 @@ module Chain
 
        , writeMarkov
        , readMarkov
+
+       , getSeed
        ) where
 
 import qualified Control.Monad.Random as R
@@ -51,9 +53,13 @@ import Data.Char (isUpper)
 import Data.Hashable (Hashable(..))
 import Data.List (foldl')
 import Data.Maybe (mapMaybe)
+import Data.Ratio (numerator, denominator)
 import Data.Serialize
+import Data.Time (UTCTime(..), getCurrentTime)
 
 import GHC.Generics (Generic)
+
+import System.CPUTime (getCPUTime)
 
 -- | Tokens are considered to be \"white-space separated words\", and
 --   can include punctuation. However, the only restriction is that
@@ -215,3 +221,15 @@ writeMarkov m fname = LB.writeFile fname $ encodeLazy m
 -- 
 readMarkov :: FilePath -> IO (Either String Markov)
 readMarkov fname = decodeLazy `fmap` LB.readFile fname
+
+-- | Based on System.Random.mkStdRNG, but just returns an `Int` value
+--   that can be used to seed a new generator.
+--
+getSeed :: IO Int
+getSeed = do
+  cTime <- getCPUTime
+  utc <- getCurrentTime
+  let daytime = toRational $ utctDayTime utc
+      (sec, psec) = (numerator daytime) `quotRem` (denominator daytime)
+  return $ fromIntegral $ sec * 12345 + psec + cTime
+

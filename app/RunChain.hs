@@ -64,10 +64,13 @@ process args = do
       let chain :: R.MonadRandom m => m [T.Text]
           chain = C.runMarkov (argLen args) markov
 
-      toks <- case argSeed args of
-        Just seed -> R.evalRandT chain (mkStdGen seed)
-        _ -> R.evalRandIO chain
-
+      seed <- case argSeed args of
+               Just s -> return s
+               _ -> C.getSeed
+ 
+      let gen = mkStdGen seed
+      putStrLn $ "Seed: " ++ show seed
+      toks <- R.evalRandT chain gen
       T.putStrLn (T.unwords toks)
 
 main :: IO ()

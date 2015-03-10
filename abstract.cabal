@@ -1,5 +1,5 @@
 name:           abstract
-Version:        0.0.0.2
+Version:        0.0.0.3
 Stability:      experimental
 License:        PublicDomain
 Author:         Douglas Burke (dburke.gw@gmail.com)
@@ -31,6 +31,8 @@ Library
     , MonadRandom == 0.3.*
     , syb == 0.4.*
     , text == 1.2.*
+    -- can probably go back further than this for time
+    , time >= 1.2 && < 1.5
     , unordered-containers == 0.2.*
 
   ghc-options: -Wall

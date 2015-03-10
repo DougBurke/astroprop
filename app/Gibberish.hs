@@ -55,6 +55,12 @@ progText = "Create a Markov chain trained on the input data."
 helpText :: String -> String
 helpText prog = prog ++ " - create a Markov chain of gibberish."
 
+-- | The random numbers are generated either with an explicit seed,
+--   or by using the system clock. I could just R.evalRandIO to run chain,
+--   and let it calculate the seed itself, but I want to display the seed
+--   value, as a diagnostic, so do it manually.
+--
+--   
 process :: Args -> IO ()
 process args = do
   files <- glob (argGlob args)
@@ -66,10 +72,13 @@ process args = do
       let chain :: R.MonadRandom m => m [T.Text]
           chain = C.runMarkov (argLen args) markov
 
-      toks <- case argSeed args of
-        Just seed -> R.evalRandT chain (mkStdGen seed)
-        _ -> R.evalRandIO chain
-
+      seed <- case argSeed args of
+               Just s -> return s
+               _ -> C.getSeed
+ 
+      let gen = mkStdGen seed
+      putStrLn $ "Seed: " ++ show seed
+      toks <- R.evalRandT chain gen
       T.putStrLn (T.unwords toks)
 
     _ -> putStrLn "*** No capital start words found in training set"

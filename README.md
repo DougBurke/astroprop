@@ -23,7 +23,7 @@ stored in the file `dev_key.txt` (in the current working directory).
 
 ~~~~
 % cabal run getproposals -- -help
-Preprocessing executable 'getproposals' for abstract-0.0.0.2...
+Preprocessing executable 'getproposals' for abstract-0.0.0.3...
 getproposals - grab proposal abstracts and titles from ADS.
 
 Usage: getproposals telescope outdir [--start ARG] [--nrows ARG]
@@ -62,7 +62,7 @@ executables, described below, can be used.
 
 ~~~~
 % cabal run gibberish -- --help
-Preprocessing executable 'gibberish' for abstract-0.0.0.2...
+Preprocessing executable 'gibberish' for abstract-0.0.0.3...
 gibberish - create a Markov chain of gibberish.
 
 Usage: gibberish glob [--nchar ARG] [--seed ARG]
@@ -78,8 +78,12 @@ As an example, if `getproposals` were run with an `outdir` of `cxo`, then
 
 ~~~~
 % cabal run gibberish -- cxo/\*title
-Preprocessing executable 'gibberish' for abstract-0.0.0.2...
-Velocity Outflow in the Chandra Deep Fields
+cabal run gibberish -- cxo/\*title
+Preprocessing library abstract-0.0.0.3...
+In-place registering abstract-0.0.0.3...
+Preprocessing executable 'gibberish' for abstract-0.0.0.3...
+Seed: 359276481432
+Unidentified X-ray Sources in the X-ray Death of Intermediate Mass Black Holes and Understanding Star Formation
 ~~~~
 
 The `--seed` option can be used to specify a seed for the generator,
@@ -92,9 +96,9 @@ a chain file:
 
 ~~~~
 % cabal run makechain -- cxo/\*title cxo.title.chain
-Preprocessing library abstract-0.0.0.2...
-In-place registering abstract-0.0.0.2...
-Preprocessing executable 'makechain' for abstract-0.0.0.2...
+Preprocessing library abstract-0.0.0.3...
+In-place registering abstract-0.0.0.3...
+Preprocessing executable 'makechain' for abstract-0.0.0.3...
 Reading files: cxo/*title
 Writing chain: cxo.title.chain
 ~~~~
@@ -104,14 +108,16 @@ gibberish:
 
 ~~~~
 % cabal run runchain -- cxo.title.chain
-Preprocessing library abstract-0.0.0.2...
-In-place registering abstract-0.0.0.2...
-Preprocessing executable 'runchain' for abstract-0.0.0.2...
-Field of Magnetar Outbursts with the Aid of Lensing Clusters from the Sloan Digital Sky Survey
+Preprocessing library abstract-0.0.0.3...
+In-place registering abstract-0.0.0.3...
+Preprocessing executable 'runchain' for abstract-0.0.0.3...
+Seed: 138596064503
+Matter Galaxy in the core of the Standard Candles Cas A and G21.5-09.
 ~~~~
 
 It also accepts the same `--seed` and `--nchar` options as the
-`gibberish` executable.
+`gibberish` executable. Using the seed value displayed above will
+re-create the output.
 
 # Building the tools
 
