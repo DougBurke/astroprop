@@ -18,7 +18,6 @@ to use word pairs (Markov Chain of order 2).
 
 module Main where
 
-import qualified Data.Text as T
 import qualified Data.Text.IO as T
 
 import qualified Chain as C
@@ -66,8 +65,8 @@ process args = do
 
       -- as I want to display the seed I don't use the system one 
       putStrLn $ "Seed: " ++ show seed
-      toks <- C.seedMarkov (argLen args) markov seed
-      T.putStrLn (T.unwords toks)
+      gibberish <- C.seedMarkov (argLen args) markov seed
+      T.putStrLn gibberish
 
     _ -> putStrLn "*** No capital start words found in training set"
 

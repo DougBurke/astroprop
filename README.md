@@ -22,8 +22,7 @@ It requires that you have a [API key](https://github.com/adsabs/adsabs-dev-api)
 stored in the file `dev_key.txt` (in the current working directory).
 
 ~~~~
-% cabal run getproposals -- -help
-Preprocessing executable 'getproposals' for abstract-0.0.0.3...
+% ./dist/build/getproposals/getproposals -help
 getproposals - grab proposal abstracts and titles from ADS.
 
 Usage: getproposals telescope outdir [--start ARG] [--nrows ARG]
@@ -57,12 +56,11 @@ Once the data is written somewhere - e.g. after
 then the `gibberish` program can be used to create the random text.
 This is useful for one-shot use; if you are going to want to create
 multiple outputs (or find you have to throw many of them away as
-they're not actually that funny), then the makechain and runchain
+they're not actually that funny), then the `makechain` and `runchain`
 executables, described below, can be used.
 
 ~~~~
-% cabal run gibberish -- --help
-Preprocessing executable 'gibberish' for abstract-0.0.0.3...
+% ./dist/build/gibberish/gibberish --help
 gibberish - create a Markov chain of gibberish.
 
 Usage: gibberish glob [--nchar ARG] [--seed ARG]
@@ -77,11 +75,7 @@ Available options:
 As an example, if `getproposals` were run with an `outdir` of `cxo`, then
 
 ~~~~
-% cabal run gibberish -- cxo/\*title
-cabal run gibberish -- cxo/\*title
-Preprocessing library abstract-0.0.0.3...
-In-place registering abstract-0.0.0.3...
-Preprocessing executable 'gibberish' for abstract-0.0.0.3...
+% ./dist/build/gibberish/gibberish cxo/\*title
 Seed: 359276481432
 Unidentified X-ray Sources in the X-ray Death of Intermediate Mass Black Holes and Understanding Star Formation
 ~~~~
@@ -95,10 +89,7 @@ The `makechain` executable will parse a set of text files, and create
 a chain file:
 
 ~~~~
-% cabal run makechain -- cxo/\*title cxo.title.chain
-Preprocessing library abstract-0.0.0.3...
-In-place registering abstract-0.0.0.3...
-Preprocessing executable 'makechain' for abstract-0.0.0.3...
+% ./dist/build/makechain/makechain cxo/\*title cxo.title.chain
 Reading files: cxo/*title
 Writing chain: cxo.title.chain
 ~~~~
@@ -107,10 +98,7 @@ The `runchain` executable uses that chain file to create the
 gibberish:
 
 ~~~~
-% cabal run runchain -- cxo.title.chain
-Preprocessing library abstract-0.0.0.3...
-In-place registering abstract-0.0.0.3...
-Preprocessing executable 'runchain' for abstract-0.0.0.3...
+% ./dist/build/runchain/runchain cxo.title.chain
 Seed: 138596064503
 Matter Galaxy in the core of the Standard Candles Cas A and G21.5-09.
 ~~~~
@@ -133,6 +121,18 @@ I suggest using the sandbox feature of
 % cabal install --only-dependencies
 % cabal build
 ~~~~
+
+It is developed and tested on a Linux system.
+
+# Notes
+
+The input is assumed to be in English; it should work for languages
+with a similar character set but the code has not been written to be
+language agnostic.
+
+The chain files written and read by `makechain` and `runchain` are
+not versioned, in that they will need to be re-generated if the internal
+format has changed.
 
 # Author
 

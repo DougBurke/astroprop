@@ -1,16 +1,34 @@
 {-# LANGUAGE DeriveGeneric #-}
+{-# LANGUAGE OverloadedStrings #-}
 
 {-
 
 This code is placed in the Public Domain.
 
-Library code for training a Markov chain on data
-and then using it to create gibberish.
+Library code for training a Markov chain on data and then using it to
+create gibberish.
 
-At present it uses an order 2 chain, using "words"
-as the token type.
+At present it uses an order 2 chain, using "words" as the token type. It
+is designed for English text; for languages with not too disimilar
+character classes it should be okay, but it is not going to support
+all languages. It has very-limited discrimination of tokens, basically
+only end-of-paragraph.
+
+There is no support for versioning data; that is, the file saved by
+writeMarkov is not guaranteed to be read in by a later version of
+readMarkov. This could be done - e.g. with SafeCopy - but I have no
+desire to do so at this time.
 
 This module defines orphan instances.
+
+TODO:
+
+  - should there be a separate mode for creating titles versus more
+    long-form text?
+
+  - it would be nice if the chain could be cut off at the end of a
+    sentence (for those inputs that have sentence-like structure).
+
 -}
 
 module Chain
@@ -47,13 +65,16 @@ import qualified Data.HashMap.Strict as M
 
 import qualified Data.Text as T
 import qualified Data.Text.Encoding as TE
+import qualified Data.Text.Lazy as LT
+import qualified Data.Text.Lazy.Builder as TB
 
 import Control.Arrow (second)
 
 import Data.Char (isUpper)
 import Data.Hashable (Hashable(..))
 import Data.List (foldl')
-import Data.Maybe (mapMaybe)
+import Data.Maybe (catMaybes)
+import Data.Monoid ((<>))
 import Data.Ratio (numerator, denominator)
 import Data.Serialize
 import Data.Time (UTCTime(..), getCurrentTime)
@@ -63,6 +84,12 @@ import GHC.Generics (Generic)
 import System.CPUTime (getCPUTime)
 import System.Random (mkStdGen)
 
+-- | I could use a boolean here, but as it's so easy to provide a
+--   "semantically meaningful" type, let's do that.
+--
+data TokenType = GeneralToken | EndParaToken
+  deriving (Eq, Ord, Generic)
+
 -- | Tokens are considered to be \"white-space separated words\", and
 --   can include punctuation. However, the only restriction is that
 --   they can not be empty.
@@ -70,22 +97,45 @@ import System.Random (mkStdGen)
 --   Comparison is "exact", in the sense that \"foo\" and \"Foo\"
 --   are different.
 --
-newtype Token = Token T.Text
+data Token = Token { tkContents :: T.Text
+                   , tkType     :: TokenType -- is this worth it?
+                   }
   deriving (Eq, Ord, Generic)
 
-toToken :: T.Text -> Maybe Token
-toToken t | T.null t  = Nothing
-          | otherwise = Just (Token t)
+-- Should the token contents contain the trailing \n for EndParaToken types?
+
+toToken :: TokenType -> T.Text -> Maybe Token
+toToken ty t | T.null t  = Nothing
+             | otherwise = Just Token { tkContents = t, tkType = ty }
+
+gToken, eToken :: T.Text -> Maybe Token
+gToken = toToken GeneralToken
+eToken = toToken EndParaToken
 
 fromToken :: Token -> T.Text
-fromToken (Token t) = t
+fromToken t =
+  let txt = tkContents t
+  in case tkType t of
+       GeneralToken -> txt
+       EndParaToken -> txt `T.snoc` '\n'
 
 lenToken :: Token -> Int
-lenToken (Token t) = T.length t
+lenToken t = 
+  let len = T.length (tkContents t)
+  in case tkType t of
+       GeneralToken -> len 
+       EndParaToken -> 1 + len
 
+-- Would the following be inlined (ditto for hashWithSalt)? I guess so
+--     hash (Token t p) = hash (t,p)
+--
 instance Hashable Token where
-  hashWithSalt s (Token t) = hashWithSalt s t
-  hash (Token t) = hash t
+  hashWithSalt s (Token t p) = s `hashWithSalt` p `hashWithSalt` t
+  hash (Token t p) = hash p `hashWithSalt` t
+
+instance Hashable TokenType where
+  hashWithSalt s GeneralToken = hashWithSalt s (0::Int)
+  hashWithSalt s EndParaToken = hashWithSalt s (1::Int)
 
 -- Hand roll a simple Markov generator. I use a slightly
 -- different type for running the chain than for building
@@ -118,13 +168,55 @@ instance (Serialize k, Hashable k, Eq k, Serialize v)
   put = put . M.toList 
   get = fmap M.fromList get
 
+instance Serialize TokenType
 instance Serialize Token
+
+-- Is it worth only serializing the map - e.g. re-create the mvStart
+-- array on read in?
 instance Serialize Markov
 
--- For the moment use a simple tokenization strategy.
+-- | This is a very-simple scheme:
+--
+--    - use words to separate tokens, which means that trailing or
+--      leading punctuation - such as .,"'() - will be included.
+--
+--    - a blank line separates paragraphs, in which case the "\n"
+--      is included in the last token of the paragraph, as a simple
+--      way to simulate paragraphs.
+--
+--    - the last token is forced to mark 'end paragraph'; perhaps it
+--      should be 'end text'?
 --
 tokenize :: T.Text -> [Token]
-tokenize = mapMaybe toToken . T.words
+tokenize txt = concatMap tokenizePara (makeParas txt)
+
+-- | Split up a string into a list of paragraphs, indicated by having
+--   one or more blank lines separating text.
+--
+--   The grouping works with reversed lists.
+--
+type Para = [T.Text]
+
+groupParas :: (Para,[Para]) -> T.Text -> (Para,[Para])
+groupParas (c,ps) l = if T.null l
+                      then ([], if null c then ps else c:ps)
+                      else (if null c then [l] else l:c, ps)
+
+-- This reverses the order of the paragraphs, but not the paragraph
+-- contents. As the paragraphs are treated as separate chunks this
+-- should not be a problem.
+makeParas :: T.Text -> [Para]
+makeParas txt = 
+  let (pl,ps) = foldl' groupParas ([],[]) (map T.strip (T.lines txt))
+  in map reverse (pl:ps)
+
+-- Probably not very efficient.
+tokenizePara :: Para -> [Token]
+tokenizePara ps = 
+  let ws = concatMap T.words ps
+  in case reverse ws of
+    [] -> []
+    (x:xs) -> reverse $ catMaybes $ eToken x : map gToken xs
 
 addTriple :: MarkovBuild -> (Token,Token,Token) -> MarkovBuild
 addTriple m (f,s,w) = 
@@ -159,7 +251,7 @@ initialize = foldl' addTokens M.empty
 --
 convert :: MarkovBuild -> Maybe Markov
 convert m = 
-  let wanted (Token t) = case T.uncons t of
+  let wanted t = case T.uncons (tkContents t) of
                    Nothing -> error "Token invariant invalidated!"
                    Just (c,_) -> isUpper c
 
@@ -184,31 +276,60 @@ buildMarkov = convert . initialize
 --
 startToken :: R.MonadRandom m => Markov -> m Key
 startToken m = R.uniform $ mvStart m
-   
+
+-- Carry around the length of the builder   
+type Builder = (Int, TB.Builder)
+
 -- | This is only intended for short output sequences.
 --
-buildChain :: R.MonadRandom m => Int -> Int -> Markov -> Key -> m [Token]
-buildChain maxlen curlen m start = 
+buildChain :: 
+  R.MonadRandom m 
+  => Int    -- ^ Maximum length, in characters.
+  -> Markov 
+  -> Builder
+  -> Key 
+  -> m Builder
+buildChain maxlen m orig start@(_,stok) = 
   case M.lookup start (mvMap m) of
-    Nothing -> return []
+    Nothing -> return orig
     Just transitions -> do
-      next <- R.fromList transitions
-      let newlen = curlen + lenToken next + 1
-      if newlen > maxlen
-        then return []
-        else do
-          rest <- buildChain maxlen newlen m (snd start,next)
-          return (next : rest)
+      ntok <- R.fromList transitions
+      let next = (stok, ntok)
+          newbld = addToken orig next
+
+      if fst newbld > maxlen
+        then return orig
+        else buildChain maxlen m newbld next
+
+-- Work out how to combine the next token with the current builder.
+--
+addToken :: Builder -> Key -> Builder
+addToken (l1,b1) (t1,t2) = 
+  let txt = fromToken t2
+      l2  = T.length txt
+      b2  = TB.fromText txt
+
+      lout = l1 + 1 + l2
+      istr = case tkType t1 of
+               EndParaToken -> "\n" -- note: b1 will end with \n so only need 1
+               GeneralToken -> " " 
+
+  in (lout, b1 <> istr <> b2)
 
 -- Stop the chain if the word takes the total length past the
 -- input len. As a simplification, the check is not applied
 -- to the starting pair.
 --
-runMarkov :: R.MonadRandom m => Int -> Markov -> m [T.Text]
+runMarkov :: R.MonadRandom m => Int -> Markov -> m T.Text
 runMarkov maxlen markov = do
   start@(s1,s2) <- startToken markov
-  rest <- buildChain maxlen (lenToken s1 + lenToken s2 + 1) markov start
-  return $ map fromToken $ s1 : s2 : rest
+  -- by construction s1 should not be an EndParaToken
+  let t1 = fromToken s1
+      t2 = fromToken s2
+      bld = TB.fromText t1 <> " " <> TB.fromText t2
+      l = 1 + T.length t1 + T.length t2
+  out <- buildChain maxlen markov (l,bld) start
+  return $ LT.toStrict $ TB.toLazyText $ snd out
 
 -- | A version of runMarkov where the seed is explicit.
 --
@@ -216,7 +337,7 @@ seedMarkov ::
   Int  -- ^ Maximum number of characters
   -> Markov 
   -> Int  -- ^ Seed for random-number generator
-  -> IO [T.Text]
+  -> IO T.Text
 seedMarkov maxlen markov seed = R.evalRandT chain gen
   where
     chain = runMarkov maxlen markov
@@ -232,7 +353,15 @@ writeMarkov :: Markov -> FilePath -> IO ()
 writeMarkov m fname = LB.writeFile fname $ encodeLazy m
 
 -- | Read in the chain from the binary file.
--- 
+--
+--   Note that there is *no* attempt at upgrading data files when
+--   types change, or even version checking. So, expect to see
+--   error messages like
+--
+--      Failed reading: Unknown encoding for constructor
+--
+--   when reading in old/invalid files.
+--
 readMarkov :: FilePath -> IO (Either String Markov)
 readMarkov fname = decodeLazy `fmap` LB.readFile fname
 
