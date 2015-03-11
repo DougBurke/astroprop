@@ -18,8 +18,6 @@ to use word pairs (Markov Chain of order 2).
 
 module Main where
 
-import qualified Control.Monad.Random as R
-
 import qualified Data.Text as T
 import qualified Data.Text.IO as T
 
@@ -29,7 +27,6 @@ import Options.Applicative
 
 import System.Environment (getProgName)
 import System.FilePath.Glob (glob)
-import System.Random (mkStdGen)
 
 -- | Command-line arguments.
 --
@@ -55,12 +52,6 @@ progText = "Create a Markov chain trained on the input data."
 helpText :: String -> String
 helpText prog = prog ++ " - create a Markov chain of gibberish."
 
--- | The random numbers are generated either with an explicit seed,
---   or by using the system clock. I could just R.evalRandIO to run chain,
---   and let it calculate the seed itself, but I want to display the seed
---   value, as a diagnostic, so do it manually.
---
---   
 process :: Args -> IO ()
 process args = do
   files <- glob (argGlob args)
@@ -69,16 +60,13 @@ process args = do
 
   case C.buildMarkov allToks of
     Just markov -> do
-      let chain :: R.MonadRandom m => m [T.Text]
-          chain = C.runMarkov (argLen args) markov
-
       seed <- case argSeed args of
                Just s -> return s
                _ -> C.getSeed
- 
-      let gen = mkStdGen seed
+
+      -- as I want to display the seed I don't use the system one 
       putStrLn $ "Seed: " ++ show seed
-      toks <- R.evalRandT chain gen
+      toks <- C.seedMarkov (argLen args) markov seed
       T.putStrLn (T.unwords toks)
 
     _ -> putStrLn "*** No capital start words found in training set"

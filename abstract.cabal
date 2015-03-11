@@ -23,12 +23,14 @@ Source-repository head
 Library
   Hs-Source-Dirs:   lib/
   Exposed-Modules:  Chain
+
   Build-Depends:
     base
     , bytestring == 0.10.*
     , cereal == 0.4.*
     , hashable == 1.2.*
     , MonadRandom == 0.3.*
+    , random == 1.1.*
     , syb == 0.4.*
     , text == 1.2.*
     -- can probably go back further than this for time
@@ -67,9 +69,7 @@ Executable gibberish
     abstract
     , base
     , Glob == 0.7.*
-    , MonadRandom == 0.3.*
     , optparse-applicative == 0.11.*
-    , random == 1.1.*
     , text == 1.2.*
 
 Executable makechain
@@ -94,8 +94,6 @@ Executable runchain
   Build-Depends:
     abstract
     , base
-    , MonadRandom == 0.3.*
     , optparse-applicative == 0.11.*
-    , random == 1.1.*
     , text == 1.2.*
 

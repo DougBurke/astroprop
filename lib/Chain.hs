@@ -27,6 +27,7 @@ module Chain
        , buildMarkov
 
        , runMarkov
+       , seedMarkov
 
        , writeMarkov
        , readMarkov
@@ -60,6 +61,7 @@ import Data.Time (UTCTime(..), getCurrentTime)
 import GHC.Generics (Generic)
 
 import System.CPUTime (getCPUTime)
+import System.Random (mkStdGen)
 
 -- | Tokens are considered to be \"white-space separated words\", and
 --   can include punctuation. However, the only restriction is that
@@ -208,7 +210,19 @@ runMarkov maxlen markov = do
   rest <- buildChain maxlen (lenToken s1 + lenToken s2 + 1) markov start
   return $ map fromToken $ s1 : s2 : rest
 
--- For now use a bnary serialization of the structure. I could,
+-- | A version of runMarkov where the seed is explicit.
+--
+seedMarkov :: 
+  Int  -- ^ Maximum number of characters
+  -> Markov 
+  -> Int  -- ^ Seed for random-number generator
+  -> IO [T.Text]
+seedMarkov maxlen markov seed = R.evalRandT chain gen
+  where
+    chain = runMarkov maxlen markov
+    gen = mkStdGen seed
+
+-- For now use a binary serialization of the structure. I could,
 -- and perhaps should, use JSON, but I want to use the cereal library.
 --
 
@@ -230,6 +244,6 @@ getSeed = do
   cTime <- getCPUTime
   utc <- getCurrentTime
   let daytime = toRational $ utctDayTime utc
-      (sec, psec) = (numerator daytime) `quotRem` (denominator daytime)
+      (sec, psec) = numerator daytime `quotRem` denominator daytime
   return $ fromIntegral $ sec * 12345 + psec + cTime
 

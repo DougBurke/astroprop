@@ -17,8 +17,6 @@ of gibberish from it.
 
 module Main where
 
-import qualified Control.Monad.Random as R
-
 import qualified Data.Text as T
 import qualified Data.Text.IO as T
 
@@ -28,7 +26,6 @@ import Options.Applicative
 
 import System.Environment (getProgName)
 import System.Exit (exitFailure)
-import System.Random (mkStdGen)
 
 -- | Command-line arguments.
 --
@@ -61,16 +58,13 @@ process args = do
     Left emsg -> putStrLn emsg >> exitFailure
 
     Right markov -> do
-      let chain :: R.MonadRandom m => m [T.Text]
-          chain = C.runMarkov (argLen args) markov
-
       seed <- case argSeed args of
                Just s -> return s
                _ -> C.getSeed
  
-      let gen = mkStdGen seed
+      -- as I want to display the seed I don't use the system one 
       putStrLn $ "Seed: " ++ show seed
-      toks <- R.evalRandT chain gen
+      toks <- C.seedMarkov (argLen args) markov seed
       T.putStrLn (T.unwords toks)
 
 main :: IO ()
