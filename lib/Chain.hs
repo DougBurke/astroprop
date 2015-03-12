@@ -49,6 +49,8 @@ module Chain
 
        , writeMarkov
        , readMarkov
+       , infoMarkov
+       , compareMarkov
 
        , getSeed
        ) where
@@ -62,6 +64,7 @@ import qualified Data.ByteString.Lazy as LB
 -- did it.
 --
 import qualified Data.HashMap.Strict as M
+import qualified Data.HashSet as S
 
 import qualified Data.Text as T
 import qualified Data.Text.Encoding as TE
@@ -375,4 +378,35 @@ getSeed = do
   let daytime = toRational $ utctDayTime utc
       (sec, psec) = numerator daytime `quotRem` denominator daytime
   return $ fromIntegral $ sec * 12345 + psec + cTime
+
+-- | Return some basic information on a Markov chain.
+--
+--   The return is a list of "key,value" pairs (since I can not be
+--   bothered to code up a structure when I do not know what information
+--   I want to return here).
+--
+infoMarkov :: Markov -> [(String, Int)]
+infoMarkov mv = 
+  let m = mvMap mv
+  in [ ("Number of keys", M.size m)
+     , ("Number of start keys", length (mvStart mv))
+     ]
+
+-- | Report some basic information on the overlap between the two chains.
+--
+--   The return is a list of "key,value" pairs (since I can not be
+--   bothered to code up a structure when I do not know what information
+--   I want to return here).
+--
+compareMarkov :: Markov -> Markov -> [(String, Int)]
+compareMarkov mv1 mv2 =
+  let m1 = mvMap mv1
+      m2 = mvMap mv2
+      k1 = S.fromList (M.keys m1)
+      k2 = S.fromList (M.keys m2)
+      both = k1 `S.intersection` k2
+  in [ ("Number of keys (chain 1)", M.size m1)
+     , ("Number of keys (chain 2)", M.size m2)
+     , ("Number of keys in both", S.size both)
+     ]
 

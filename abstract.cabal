@@ -97,3 +97,25 @@ Executable runchain
     , optparse-applicative == 0.11.*
     , text == 1.2.*
 
+Executable infochain
+  Hs-Source-Dirs: app/
+  Main-Is:     InfoChain.hs
+
+  ghc-options: -Wall
+
+  Build-Depends:
+    abstract
+    , base
+    , optparse-applicative == 0.11.*
+
+Executable comparechain
+  Hs-Source-Dirs: app/
+  Main-Is:     CompareChain.hs
+
+  ghc-options: -Wall
+
+  Build-Depends:
+    abstract
+    , base
+    , optparse-applicative == 0.11.*
+

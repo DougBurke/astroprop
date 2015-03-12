@@ -107,6 +107,11 @@ It also accepts the same `--seed` and `--nchar` options as the
 `gibberish` executable. Using the seed value displayed above will
 re-create the output.
 
+# Comparing chains
+
+The `infochain` and `comparechain` executables provide *very basic*
+information on chains: at present just the number of keys.
+
 # Building the tools
 
 You'll need a Haskell compiler - it has only been tested with
