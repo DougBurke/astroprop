@@ -112,6 +112,14 @@ re-create the output.
 The `infochain` and `comparechain` executables provide *very basic*
 information on chains: at present just the number of keys.
 
+# Combining chains
+
+The `combinechain` executable combines two chains:
+
+~~~~
+% ./dist/build/combinechain/combinechain chain1 chain2 newchain
+~~~~
+
 # Building the tools
 
 You'll need a Haskell compiler - it has only been tested with

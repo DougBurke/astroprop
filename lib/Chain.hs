@@ -29,6 +29,16 @@ TODO:
   - it would be nice if the chain could be cut off at the end of a
     sentence (for those inputs that have sentence-like structure).
 
+QUESTION:
+
+Why is there a new line + " " here?
+
+% ./dist/build/runchain/runchain apod.chain  --nchar 800
+Seed: 1564520522164
+Discovery.
+ The brief, flaring track of totality before the year 1006 AD.
+
+
 -}
 
 module Chain
@@ -43,6 +53,7 @@ module Chain
        , TransitionWeights
        , Markov
        , buildMarkov
+       , combineMarkov
 
        , runMarkov
        , seedMarkov
@@ -159,6 +170,9 @@ data Markov = Markov
   { mvMap :: M.HashMap Key TransitionWeights
   , mvStart :: [Key] -- should this use a NonEmptyList representation?
   } deriving Generic
+
+-- This forms a semigroup but is it worth writing an instance?
+-- It would use combineMarkov
 
 -- Need to convert between text and bytestring
 --
@@ -367,6 +381,24 @@ writeMarkov m fname = LB.writeFile fname $ encodeLazy m
 --
 readMarkov :: FilePath -> IO (Either String Markov)
 readMarkov fname = decodeLazy `fmap` LB.readFile fname
+
+-- | Combine the two chains.
+--
+--   It is probable that the first chain should be the "smaller",
+--   for efficient combination, but I haven't actually benchmarked
+--   it.
+--
+combineMarkov :: Markov -> Markov -> Markov
+combineMarkov (Markov m1 s1) (Markov m2 s2) = 
+  let s12 = S.toList (S.fromList s1 `S.union` S.fromList s2)
+      m12 = M.unionWith combineWeights m1 m2
+  in Markov m12 s12
+
+combineWeights :: TransitionWeights -> TransitionWeights -> TransitionWeights
+combineWeights w1 w2 = 
+  let m1 = M.fromList w1
+      m2 = M.fromList w2
+  in M.toList (M.unionWith (+) m1 m2)
 
 -- | Based on System.Random.mkStdRNG, but just returns an `Int` value
 --   that can be used to seed a new generator.

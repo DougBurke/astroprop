@@ -119,3 +119,14 @@ Executable comparechain
     , base
     , optparse-applicative == 0.11.*
 
+Executable combinechain
+  Hs-Source-Dirs: app/
+  Main-Is:     CombineChain.hs
+
+  ghc-options: -Wall
+
+  Build-Depends:
+    abstract
+    , base
+    , optparse-applicative == 0.11.*
+
