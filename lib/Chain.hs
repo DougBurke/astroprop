@@ -77,6 +77,8 @@ import qualified Data.ByteString.Lazy as LB
 import qualified Data.HashMap.Strict as M
 import qualified Data.HashSet as S
 
+import qualified Data.List.NonEmpty as NE
+
 import qualified Data.Text as T
 import qualified Data.Text.Encoding as TE
 import qualified Data.Text.Lazy as LT
@@ -88,8 +90,8 @@ import Data.Char (isUpper)
 import Data.Hashable (Hashable(..))
 import Data.List (foldl')
 import Data.Maybe (catMaybes)
-import Data.Monoid ((<>))
 import Data.Ratio (numerator, denominator)
+import Data.Semigroup
 import Data.Serialize
 import Data.Time (UTCTime(..), getCurrentTime)
 
@@ -168,11 +170,11 @@ type TransitionWeights = [TransitionWeight]
 --
 data Markov = Markov
   { mvMap :: M.HashMap Key TransitionWeights
-  , mvStart :: [Key] -- should this use a NonEmptyList representation?
+  , mvStart :: NE.NonEmpty Key
   } deriving Generic
 
--- This forms a semigroup but is it worth writing an instance?
--- It would use combineMarkov
+instance Semigroup Markov where
+  (<>) = combineMarkov
 
 -- Need to convert between text and bytestring
 --
@@ -184,6 +186,10 @@ instance (Serialize k, Hashable k, Eq k, Serialize v)
           => Serialize (M.HashMap k v) where
   put = put . M.toList 
   get = fmap M.fromList get
+
+instance Serialize a => Serialize (NE.NonEmpty a) where
+  put = put . NE.toList
+  get = fmap NE.fromList get
 
 instance Serialize TokenType
 instance Serialize Token
@@ -267,17 +273,18 @@ initialize = foldl' addTokens M.empty
 --   for which the first word is capitalized.
 --
 convert :: MarkovBuild -> Maybe Markov
-convert m = 
+convert m = do
   let wanted t = case T.uncons (tkContents t) of
                    Nothing -> error "Token invariant invalidated!"
                    Just (c,_) -> isUpper c
 
-      start = filter (wanted.fst) $ M.keys m
-      out = Markov { mvMap = M.map (map (second toRational). M.toList) m
-                   , mvStart = start
-                   }
+      start = filter (wanted.fst) (M.keys m)
+      mmap  = M.map (map (second toRational) . M.toList) m
 
-  in if null start then Nothing else Just out
+  keys <- NE.nonEmpty start
+  return Markov { mvMap = mmap
+                , mvStart = keys
+                }
 
 -- | Train a chain on the input tokens. The return is @Nothing@
 --   if the final set has no capitalized words to start the chain.
@@ -288,11 +295,10 @@ buildMarkov = convert . initialize
 -- | Pick a start pair from the set, ensuring that the
 --   first token is capitalized.
 --
---   This *assumes* that there is a capitalized starting
---   token in the training set.
---
 startToken :: R.MonadRandom m => Markov -> m Key
-startToken m = R.uniform $ mvStart m
+startToken = R.uniform . NE.toList . mvStart 
+-- having to convert to a list may not be efficient, but let's worry about
+-- that if I ever get around to profiling the code
 
 -- Carry around the length of the builder   
 type Builder = (Int, TB.Builder)
@@ -390,7 +396,10 @@ readMarkov fname = decodeLazy `fmap` LB.readFile fname
 --
 combineMarkov :: Markov -> Markov -> Markov
 combineMarkov (Markov m1 s1) (Markov m2 s2) = 
-  let s12 = S.toList (S.fromList s1 `S.union` S.fromList s2)
+  let conv = S.fromList . NE.toList
+      -- NE.fromList will error out if the input is empty, but this
+      -- is not possible here.
+      s12 = NE.fromList (S.toList (conv s1 `S.union` conv s2))
       m12 = M.unionWith combineWeights m1 m2
   in Markov m12 s12
 
@@ -421,7 +430,7 @@ infoMarkov :: Markov -> [(String, Int)]
 infoMarkov mv = 
   let m = mvMap mv
   in [ ("Number of keys", M.size m)
-     , ("Number of start keys", length (mvStart mv))
+     , ("Number of start keys", NE.length (mvStart mv))
      ]
 
 -- | Report some basic information on the overlap between the two chains.

@@ -114,10 +114,11 @@ information on chains: at present just the number of keys.
 
 # Combining chains
 
-The `combinechain` executable combines two chains:
+The `combinechain` executable combines multiple chains (please excuse
+the odd argument order):
 
 ~~~~
-% ./dist/build/combinechain/combinechain chain1 chain2 newchain
+% ./dist/build/combinechain/combinechain newchain chain1 ... chainn
 ~~~~
 
 # Building the tools

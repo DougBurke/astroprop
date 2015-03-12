@@ -4,17 +4,20 @@ This code is placed in the Public Domain.
 
 Usage:
 
-  combinechain <chain1> <chain2> <out chain>
+  combinechain <out chain> <chain1> ... <chainn>
 
 Aim:
 
-Combine the two chains, writing out the result.
+Combine the chains, writing out the result, with a rather surprising
+argument order.
 
 -}
 
 module Main where
 
 import qualified Chain as C
+import qualified Data.List.NonEmpty as NE
+import qualified Data.Semigroup as S
 
 import Options.Applicative
 
@@ -23,19 +26,19 @@ import System.Exit (exitFailure)
 
 -- | Command-line arguments.
 --
-data Args = Args { argChain1 :: FilePath
-                 , argChain2 :: FilePath
-                 , argOutput :: FilePath
+data Args = Args { argOutput :: FilePath
+                 , argChains :: [FilePath] 
+                   -- this should not be empty but not encoded as such
                  }
+
 
 argParser :: Parser Args
 argParser = Args
-  <$> argument str (metavar "chain1")
-  <*> argument str (metavar "chain2")
-  <*> argument str (metavar "output")
+  <$> argument str (metavar "output")
+  <*> some (argument str (metavar "chains..."))
 
 progText :: String
-progText = "Combine the two chains."
+progText = "Combine multiple chains, created by makechain, into a single chain."
 
 helpText :: String -> String
 helpText prog = prog ++ " - combine chains."
@@ -49,11 +52,11 @@ getChain fname = do
                  >> exitFailure
     Right m   -> return m
 
+-- | This requires that there's at least one file name
 process :: Args -> IO ()
 process args = do
-  markov1 <- getChain (argChain1 args)
-  markov2 <- getChain (argChain2 args)
-  let markov = C.combineMarkov markov1 markov2
+  markovs <- mapM getChain (argChains args)
+  let markov = S.sconcat (NE.fromList markovs)
   C.writeMarkov markov (argOutput args)
 
 main :: IO ()
