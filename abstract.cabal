@@ -120,6 +120,7 @@ Executable dumpchain
     abstract
     , base
     , optparse-applicative == 0.11.*
+    , semigroups
     , text
     , unordered-containers
 

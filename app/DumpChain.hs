@@ -19,6 +19,7 @@ That is, each (Key, (Word,Count)) tuple is displayed on a single line.
 module Main where
 
 import qualified Data.HashMap.Strict as M
+import qualified Data.List.NonEmpty as NE
 import qualified Data.Text as T
 import qualified Data.Text.IO as T
 
@@ -56,7 +57,7 @@ dumpMarkov m = do
   let dump ((k1,k2), vs) = 
         -- I assume small enough strings that using a builder is not worth it
         let hdr = C.dumpToken k1 <> tab <> C.dumpToken k2 <> tab
-        in mapM_ (dumpv hdr) vs
+        in mapM_ (dumpv hdr) (NE.toList vs)
 
       -- going to assume that the denominator is always 1; it should be
       fromN = T.pack . show . numerator

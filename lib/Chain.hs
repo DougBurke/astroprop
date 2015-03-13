@@ -180,7 +180,8 @@ type MarkovBuild = M.HashMap Key TransitionMap
 -- remotely important.
 --
 type TransitionWeight = (Token, Rational)
-type TransitionWeights = [TransitionWeight]
+type TransitionWeights = NE.NonEmpty TransitionWeight
+-- type TransitionWeights = [TransitionWeight]
 
 -- | The \"trained\" Markov chain.
 --
@@ -307,7 +308,14 @@ convert m = do
              Just (c,_) -> isUpper c
 
       start = filter wanted (M.keys m)
-      mmap  = M.map (map (second toRational) . M.toList) m
+
+      -- It should be safe to use NE.fromList here, due to the
+      -- way the MarkovBuild structure is built.
+      toFreq :: TransitionMap -> TransitionWeights
+      -- toFreq = map (second toRational) . M.toList
+      toFreq = NE.fromList . map (second toRational) . M.toList
+
+      mmap  = M.map toFreq m
 
   keys <- NE.nonEmpty start
   return Markov { mvMap = mmap
@@ -344,7 +352,7 @@ buildChain maxlen m orig start@(_,stok) =
   case M.lookup start (mvMap m) of
     Nothing -> return orig
     Just transitions -> do
-      ntok <- R.fromList transitions
+      ntok <- R.fromList (NE.toList transitions)
       let next = (stok, ntok)
           newbld = addToken orig next
 
@@ -433,9 +441,9 @@ combineMarkov (Markov m1 s1) (Markov m2 s2) =
 
 combineWeights :: TransitionWeights -> TransitionWeights -> TransitionWeights
 combineWeights w1 w2 = 
-  let m1 = M.fromList w1
-      m2 = M.fromList w2
-  in M.toList (M.unionWith (+) m1 m2)
+  let m1 = M.fromList (NE.toList w1)
+      m2 = M.fromList (NE.toList w2)
+  in NE.fromList (M.toList (M.unionWith (+) m1 m2))
 
 -- | Based on System.Random.mkStdRNG, but just returns an `Int` value
 --   that can be used to seed a new generator.
