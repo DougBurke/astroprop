@@ -68,7 +68,7 @@ process args = do
       gibberish <- C.seedMarkov (argLen args) markov seed
       T.putStrLn gibberish
 
-    _ -> putStrLn "*** No capital start words found in training set"
+    _ -> putStrLn "*** No valid start words found in training set!"
 
 main :: IO ()
 main = do

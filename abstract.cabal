@@ -110,6 +110,19 @@ Executable infochain
     , base
     , optparse-applicative == 0.11.*
 
+Executable dumpchain
+  Hs-Source-Dirs: app/
+  Main-Is:     DumpChain.hs
+
+  ghc-options: -Wall
+
+  Build-Depends:
+    abstract
+    , base
+    , optparse-applicative == 0.11.*
+    , text
+    , unordered-containers
+
 Executable comparechain
   Hs-Source-Dirs: app/
   Main-Is:     CompareChain.hs

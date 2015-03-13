@@ -23,28 +23,30 @@ This module defines orphan instances.
 
 TODO:
 
-  - should there be a separate mode for creating titles versus more
+  - Should there be a separate mode for creating titles versus more
     long-form text?
 
-  - it would be nice if the chain could be cut off at the end of a
+  - It would be nice if the chain could be cut off at the end of a
     sentence (for those inputs that have sentence-like structure).
 
-QUESTION:
+  - Switch the token type to be a union type, such as
 
-Why is there a new line + " " here?
+      TokenText T.Text | StartPara | EndPara
 
-% ./dist/build/runchain/runchain apod.chain  --nchar 800
-Seed: 1564520522164
-Discovery.
- The brief, flaring track of totality before the year 1006 AD.
+    That is, treat the "punctuation" as separate tokens.
 
+    At present, the fact that multiple paragraphs are supported is
+    somewhat of a fluke, and I wonder if the above formulation would
+    make support a bit clearer.
 
 -}
 
 module Chain
        ( Token
+       , TokenType(..)
        , toToken
        , fromToken
+       , dumpToken
        , lenToken
        , tokenize
 
@@ -62,6 +64,7 @@ module Chain
        , readMarkov
        , infoMarkov
        , compareMarkov
+       , getTransitions
 
        , getSeed
        ) where
@@ -135,6 +138,13 @@ fromToken t =
        GeneralToken -> txt
        EndParaToken -> txt `T.snoc` '\n'
 
+dumpToken :: Token -> T.Text
+dumpToken t =
+  let txt = tkContents t
+  in case tkType t of
+       GeneralToken -> txt
+       EndParaToken -> txt `T.append` "\\n"
+
 lenToken :: Token -> Int
 lenToken t = 
   let len = T.length (tkContents t)
@@ -163,6 +173,12 @@ type Key = (Token, Token)
 type TransitionMap = M.HashMap Token Int
 type MarkovBuild = M.HashMap Key TransitionMap
 
+-- Could use a non-empty list here for TransitionWeights? There's
+-- be a cost paid whenever a token is randomly extracted, since
+-- there has to be a conversion from NonEmpty a to [a], but of the
+-- output text is meant to be small, then this is unlikely to be
+-- remotely important.
+--
 type TransitionWeight = (Token, Rational)
 type TransitionWeights = [TransitionWeight]
 
@@ -172,6 +188,10 @@ data Markov = Markov
   { mvMap :: M.HashMap Key TransitionWeights
   , mvStart :: NE.NonEmpty Key
   } deriving Generic
+
+-- | What are the transitions in the chain?
+getTransitions :: Markov -> M.HashMap Key TransitionWeights
+getTransitions = mvMap
 
 instance Semigroup Markov where
   (<>) = combineMarkov
@@ -265,20 +285,28 @@ addTokens orig toks =
 initialize :: [[Token]] -> MarkovBuild
 initialize = foldl' addTokens M.empty
 
--- | Converts the build form of the chain into the version
---   used to create an instance of a chain.
+-- | Converts the build form of the chain into the version used to
+-- create an instance of a chain.
 --
---   It returns @Nothing@ if there are no
---   keys - i.e. possible starting word pairs - 
---   for which the first word is capitalized.
+--   It returns @Nothing@ if there are no keys - i.e. possible
+--   starting word pairs - for which the first word is
+--   capitalized. The restrictions on what is needed to be
+--   a \""starting pair\" includes:
+--
+--      - first token is capitalized
+--      - both tokens are not EndParaToken
 --
 convert :: MarkovBuild -> Maybe Markov
 convert m = do
-  let wanted t = case T.uncons (tkContents t) of
-                   Nothing -> error "Token invariant invalidated!"
-                   Just (c,_) -> isUpper c
+  let wanted (t1,t2) = 
+        let cts1 = tkContents t1
+            ty1 = tkType t1
+            ty2 = tkType t2
+        in ty2 == ty1 && ty1 == GeneralToken && case T.uncons cts1 of
+             Nothing -> error "Token invariant invalidated!"
+             Just (c,_) -> isUpper c
 
-      start = filter (wanted.fst) (M.keys m)
+      start = filter wanted (M.keys m)
       mmap  = M.map (map (second toRational) . M.toList) m
 
   keys <- NE.nonEmpty start

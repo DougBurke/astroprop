@@ -56,7 +56,7 @@ process args = do
       putStrLn $ "Writing chain: " ++ argOut args
       C.writeMarkov markov (argOut args)
 
-    _ -> putStrLn "*** No capital start words found in training set"
+    _ -> putStrLn "*** No valid start words found in training set!"
          >> exitFailure
 
 main :: IO ()

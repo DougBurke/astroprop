@@ -110,7 +110,11 @@ re-create the output.
 # Comparing chains
 
 The `infochain` and `comparechain` executables provide *very basic*
-information on chains: at present just the number of keys.
+information on chains: at present just the number of keys. The
+`dumpchains` executable lists the triples along with the count in a
+very simple manner, as it's just intended for diagnosing issues (it
+could do something useful, like create JSON output, but I'll leave
+that until I need it).
 
 # Combining chains
 
