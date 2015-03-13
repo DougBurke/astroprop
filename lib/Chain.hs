@@ -1,4 +1,5 @@
 {-# LANGUAGE DeriveGeneric #-}
+{-# LANGUAGE GeneralizedNewtypeDeriving #-}
 {-# LANGUAGE OverloadedStrings #-}
 
 {-
@@ -51,6 +52,8 @@ module Chain
        , tokenize
 
        , Key
+       , TransitionFraction
+       , fromFrac
        , TransitionWeight
        , TransitionWeights
        , Markov
@@ -174,12 +177,28 @@ type TransitionMap = M.HashMap Token Int
 type MarkovBuild = M.HashMap Key TransitionMap
 
 -- Could use a non-empty list here for TransitionWeights? There's
--- be a cost paid whenever a token is randomly extracted, since
+-- a cost to be paid whenever a token is randomly extracted, since
 -- there has to be a conversion from NonEmpty a to [a], but of the
 -- output text is meant to be small, then this is unlikely to be
 -- remotely important.
 --
-type TransitionWeight = (Token, Rational)
+
+-- type TransitionWeight = (Token, Rational)
+type TransitionWeight = (Token, TransitionFraction)
+
+-- I use a newtype so that I can serialize it as an int to see if
+-- it saves space. It does, but it's not a huge amount (e.g.
+-- several MB for a 30 MB file).
+--
+newtype TransitionFraction = TF Rational
+  deriving Num
+
+toFrac :: Rational -> TransitionFraction
+toFrac = TF
+
+fromFrac :: TransitionFraction -> Rational
+fromFrac (TF x) = x
+
 type TransitionWeights = NE.NonEmpty TransitionWeight
 -- type TransitionWeights = [TransitionWeight]
 
@@ -214,6 +233,18 @@ instance Serialize a => Serialize (NE.NonEmpty a) where
 
 instance Serialize TokenType
 instance Serialize Token
+
+-- Assume that the fraction always has a denominator of 1 and
+-- that we can convert from an Integer to Int without worrying
+-- about overflow.
+--
+instance Serialize TransitionFraction where
+  put = let conv :: TransitionFraction -> Int
+            conv = fromIntegral . numerator . fromFrac
+        in put . conv
+  get = let conv :: Int -> TransitionFraction
+            conv = toFrac . toRational
+        in fmap conv get
 
 -- Is it worth only serializing the map - e.g. re-create the mvStart
 -- array on read in?
@@ -313,7 +344,7 @@ convert m = do
       -- way the MarkovBuild structure is built.
       toFreq :: TransitionMap -> TransitionWeights
       -- toFreq = map (second toRational) . M.toList
-      toFreq = NE.fromList . map (second toRational) . M.toList
+      toFreq = NE.fromList . map (second (toFrac.toRational)) . M.toList
 
       mmap  = M.map toFreq m
 
@@ -352,7 +383,9 @@ buildChain maxlen m orig start@(_,stok) =
   case M.lookup start (mvMap m) of
     Nothing -> return orig
     Just transitions -> do
-      ntok <- R.fromList (NE.toList transitions)
+      -- is the unwrapping of the TransitionFraction compiled away?
+      -- ntok <- R.fromList (NE.toList transitions)
+      ntok <- R.fromList (map (second fromFrac) (NE.toList transitions))
       let next = (stok, ntok)
           newbld = addToken orig next
 
@@ -403,7 +436,7 @@ seedMarkov maxlen markov seed = R.evalRandT chain gen
     gen = mkStdGen seed
 
 -- For now use a binary serialization of the structure. I could,
--- and perhaps should, use JSON, but I want to use the cereal library.
+-- and perhaps should, use JSON, but I want to try out the cereal library.
 --
 
 -- | Write out the chain as a binary file, overwriting any existing file.

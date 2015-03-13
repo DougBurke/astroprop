@@ -60,7 +60,7 @@ dumpMarkov m = do
         in mapM_ (dumpv hdr) (NE.toList vs)
 
       -- going to assume that the denominator is always 1; it should be
-      fromN = T.pack . show . numerator
+      fromN = T.pack . show . numerator . C.fromFrac
       dumpv hdr (v,n) = T.putStrLn (hdr <> C.dumpToken v <> tab <> fromN n)
 
       mmap = M.toList (C.getTransitions m)
