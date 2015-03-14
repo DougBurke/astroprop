@@ -14,7 +14,7 @@ titles. However, past success is not indicator of future performance!
 This code is in the Public Domain. There is no warranty. If you're
 proposal is not successful then I am not to blame.
 
-# Getting the data
+# Getting the data: Telescope proposals
 
 The `getproposals` program is used to find proposal titles and
 abstracts from the [NASA/ADS](http://adswww.harvard.edu/) service.
@@ -46,6 +46,38 @@ of the `--nrows` option. Your limits on how many items can be queried
 at a single time can be found by querying
 
     http://adslabs.org/adsabs/api/settings/?dev_key=...
+
+# Getting the data: APOD
+
+The `getapod` executable will download APOD pages. To avoid hammering
+the server it limits the number of files - which can be changed with
+the --npages option - and it can also save/read a local index file,
+again to save some downloading.
+
+The pages are searched in descending time order (actually,
+the same order as given on the 
+[APOD index page](http://apod.nasa.gov/apod/archivepix.html)).
+
+The following will download 10 pages to the directory apod/html/,
+creating it if necessary.
+
+~~~~
+% ./dist/build/getapod/getapod apod/html --npages 10
+~~~~
+
+To use a local index file:
+
+~~~~
+% ./dist/build/getapod/getapod apod/html --index apod/index.html
+% ./dist/build/getapod/getapod apod/html --index apod/index.html
+~~~~
+
+The first call downloads the index file, processes it, and then
+stores it in apod/index.html (assuming that the apod/ directory
+exists). The second call reads from the file rather than
+downloading it.
+
+The APOD files can be converted to text form using `extractapod`.
 
 # Creating gibberish
 

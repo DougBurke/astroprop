@@ -50,7 +50,7 @@ Executable getproposals
   Build-Depends:
     aeson == 0.8.*
     , base
-    , bytestring == 0.10.*
+    , bytestring
     , directory == 1.2.*
     , filepath == 1.3.*
     , mtl >= 2.1 && < 2.3
@@ -60,6 +60,38 @@ Executable getproposals
     , pipes-http == 1.0.*
     , strict == 0.3.*
     , text == 1.2.*
+
+Executable getapod
+  Hs-Source-Dirs: app/
+  Main-Is:     GetAPOD.hs
+
+  ghc-options: -Wall
+
+  Build-Depends:
+    base
+    , bytestring
+    , directory == 1.2.*
+    , filepath == 1.3.*
+    , optparse-applicative == 0.11.*
+    , pipes == 4.1.*
+    , pipes-bytestring == 2.1.*
+    , pipes-http == 1.0.*
+    , strict == 0.3.*
+    , tagsoup == 0.13.*
+
+Executable extractapod
+  Hs-Source-Dirs: app/
+  Main-Is:     ExtractAPOD.hs
+
+  ghc-options: -Wall
+
+  Build-Depends:
+    base
+    , bytestring
+    , filepath == 1.3.*
+    , optparse-applicative == 0.11.*
+    , tagsoup == 0.13.*
+    , text
 
 Executable gibberish
   Hs-Source-Dirs: app/
