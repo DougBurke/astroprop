@@ -1,5 +1,4 @@
 {-# LANGUAGE DeriveGeneric #-}
-{-# LANGUAGE GeneralizedNewtypeDeriving #-}
 {-# LANGUAGE OverloadedStrings #-}
 
 {-
@@ -188,16 +187,27 @@ type TransitionWeight = (Token, TransitionFraction)
 
 -- I use a newtype so that I can serialize it as an int to see if
 -- it saves space. It does, but it's not a huge amount (e.g.
--- several MB for a 30 MB file).
+-- several MB for a 30 MB file). I have tried to make sure that
+-- the constaint that the rational instance has a denominator of 1
+-- is handled by the type system, but it is an implicit constraint;
+-- i.e. new code could break it without a type error.
 --
 newtype TransitionFraction = TF Rational
-  deriving Num
 
-toFrac :: Rational -> TransitionFraction
-toFrac = TF
+-- Note: the conversions are asymmetric
+toFrac :: Int -> TransitionFraction
+toFrac = TF . toRational
 
 fromFrac :: TransitionFraction -> Rational
 fromFrac (TF x) = x
+
+-- I originally had derived a Num instance for TransitionFraction
+-- but that provides more functionality than we need (particularly
+-- as I want to keep the constraint that the Rational values
+-- stored within TF all have a denominator of 1).
+--
+addFrac :: TransitionFraction -> TransitionFraction -> TransitionFraction
+addFrac (TF x) (TF y) = TF (x+y)
 
 type TransitionWeights = NE.NonEmpty TransitionWeight
 -- type TransitionWeights = [TransitionWeight]
@@ -242,9 +252,7 @@ instance Serialize TransitionFraction where
   put = let conv :: TransitionFraction -> Int
             conv = fromIntegral . numerator . fromFrac
         in put . conv
-  get = let conv :: Int -> TransitionFraction
-            conv = toFrac . toRational
-        in fmap conv get
+  get = fmap toFrac get
 
 -- Is it worth only serializing the map - e.g. re-create the mvStart
 -- array on read in?
@@ -343,8 +351,7 @@ convert m = do
       -- It should be safe to use NE.fromList here, due to the
       -- way the MarkovBuild structure is built.
       toFreq :: TransitionMap -> TransitionWeights
-      -- toFreq = map (second toRational) . M.toList
-      toFreq = NE.fromList . map (second (toFrac.toRational)) . M.toList
+      toFreq = NE.fromList . map (second toFrac) . M.toList
 
       mmap  = M.map toFreq m
 
@@ -476,7 +483,7 @@ combineWeights :: TransitionWeights -> TransitionWeights -> TransitionWeights
 combineWeights w1 w2 = 
   let m1 = M.fromList (NE.toList w1)
       m2 = M.fromList (NE.toList w2)
-  in NE.fromList (M.toList (M.unionWith (+) m1 m2))
+  in NE.fromList (M.toList (M.unionWith addFrac m1 m2))
 
 -- | Based on System.Random.mkStdRNG, but just returns an `Int` value
 --   that can be used to seed a new generator.
