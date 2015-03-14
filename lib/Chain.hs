@@ -43,7 +43,6 @@ TODO:
 
 module Chain
        ( Token
-       , TokenType(..)
        , toToken
        , fromToken
        , dumpToken
@@ -105,12 +104,6 @@ import GHC.Generics (Generic)
 import System.CPUTime (getCPUTime)
 import System.Random (mkStdGen)
 
--- | I could use a boolean here, but as it's so easy to provide a
---   "semantically meaningful" type, let's do that.
---
-data TokenType = GeneralToken | EndParaToken
-  deriving (Eq, Ord, Generic)
-
 -- | Tokens are considered to be \"white-space separated words\", and
 --   can include punctuation. However, the only restriction is that
 --   they can not be empty.
@@ -118,52 +111,29 @@ data TokenType = GeneralToken | EndParaToken
 --   Comparison is "exact", in the sense that \"foo\" and \"Foo\"
 --   are different.
 --
-data Token = Token { tkContents :: T.Text
-                   , tkType     :: TokenType -- is this worth it?
-                   }
+data Token = TextToken T.Text | EndParaToken
   deriving (Eq, Ord, Generic)
 
--- Should the token contents contain the trailing \n for EndParaToken types?
-
-toToken :: TokenType -> T.Text -> Maybe Token
-toToken ty t | T.null t  = Nothing
-             | otherwise = Just Token { tkContents = t, tkType = ty }
-
-gToken, eToken :: T.Text -> Maybe Token
-gToken = toToken GeneralToken
-eToken = toToken EndParaToken
+toToken :: T.Text -> Maybe Token
+toToken t | T.null t  = Nothing
+          | otherwise = Just (TextToken t)
 
 fromToken :: Token -> T.Text
-fromToken t =
-  let txt = tkContents t
-  in case tkType t of
-       GeneralToken -> txt
-       EndParaToken -> txt `T.snoc` '\n'
+fromToken EndParaToken  = "\n\n"
+fromToken (TextToken t) = t
 
 dumpToken :: Token -> T.Text
-dumpToken t =
-  let txt = tkContents t
-  in case tkType t of
-       GeneralToken -> txt
-       EndParaToken -> txt `T.append` "\\n"
+dumpToken EndParaToken  = "\\n\\n"
+dumpToken (TextToken t) = t
 
 lenToken :: Token -> Int
-lenToken t = 
-  let len = T.length (tkContents t)
-  in case tkType t of
-       GeneralToken -> len 
-       EndParaToken -> 1 + len
+lenToken EndParaToken  = 2
+lenToken (TextToken t) = T.length t
 
--- Would the following be inlined (ditto for hashWithSalt)? I guess so
---     hash (Token t p) = hash (t,p)
---
+-- Since tokens can not be empty, this should be okay.
 instance Hashable Token where
-  hashWithSalt s (Token t p) = s `hashWithSalt` p `hashWithSalt` t
-  hash (Token t p) = hash p `hashWithSalt` t
-
-instance Hashable TokenType where
-  hashWithSalt s GeneralToken = hashWithSalt s (0::Int)
-  hashWithSalt s EndParaToken = hashWithSalt s (1::Int)
+  hashWithSalt s EndParaToken  = hashWithSalt s T.empty
+  hashWithSalt s (TextToken t) = hashWithSalt s t
 
 -- Hand roll a simple Markov generator. I use a slightly
 -- different type for running the chain than for building
@@ -194,7 +164,9 @@ type TransitionWeight = (Token, TransitionFraction)
 --
 newtype TransitionFraction = TF Rational
 
--- Note: the conversions are asymmetric
+-- Note: the conversions are asymmetric to ensure you can not make
+-- a fraction (i.e. denominator is not 1).
+--
 toFrac :: Int -> TransitionFraction
 toFrac = TF . toRational
 
@@ -241,12 +213,14 @@ instance Serialize a => Serialize (NE.NonEmpty a) where
   put = put . NE.toList
   get = fmap NE.fromList get
 
-instance Serialize TokenType
 instance Serialize Token
 
 -- Assume that the fraction always has a denominator of 1 and
 -- that we can convert from an Integer to Int without worrying
--- about overflow.
+-- about overflow. I have attempted to provide an interface
+-- to TransitionFraction that enforces this constraint, but
+-- there's no guarantee (particularly here, where the internals
+-- are exposed).
 --
 instance Serialize TransitionFraction where
   put = let conv :: TransitionFraction -> Int
@@ -263,9 +237,7 @@ instance Serialize Markov
 --    - use words to separate tokens, which means that trailing or
 --      leading punctuation - such as .,"'() - will be included.
 --
---    - a blank line separates paragraphs, in which case the "\n"
---      is included in the last token of the paragraph, as a simple
---      way to simulate paragraphs.
+--    - a blank line separates paragraphs
 --
 --    - the last token is forced to mark 'end paragraph'; perhaps it
 --      should be 'end text'?
@@ -299,7 +271,7 @@ tokenizePara ps =
   let ws = concatMap T.words ps
   in case reverse ws of
     [] -> []
-    (x:xs) -> reverse $ catMaybes $ eToken x : map gToken xs
+    (x:xs) -> reverse $ catMaybes $ Just EndParaToken : toToken x : map toToken xs
 
 addTriple :: MarkovBuild -> (Token,Token,Token) -> MarkovBuild
 addTriple m (f,s,w) = 
@@ -338,13 +310,11 @@ initialize = foldl' addTokens M.empty
 --
 convert :: MarkovBuild -> Maybe Markov
 convert m = do
-  let wanted (t1,t2) = 
-        let cts1 = tkContents t1
-            ty1 = tkType t1
-            ty2 = tkType t2
-        in ty2 == ty1 && ty1 == GeneralToken && case T.uncons cts1 of
-             Nothing -> error "Token invariant invalidated!"
-             Just (c,_) -> isUpper c
+  let wanted (TextToken t1, TextToken _) =
+        case T.uncons t1 of
+          Nothing -> error "Token invariant invalidated!"
+          Just (c,_) -> isUpper c
+      wanted (_,_) = False
 
       start = filter wanted (M.keys m)
 
@@ -401,20 +371,19 @@ buildChain maxlen m orig start@(_,stok) =
         else buildChain maxlen m newbld next
 
 -- Work out how to combine the next token with the current builder.
---
+-- 
 addToken :: Builder -> Key -> Builder
-addToken (l1,b1) (t1,t2) = 
-  let txt = fromToken t2
-      l2  = T.length txt
-      b2  = TB.fromText txt
-
-      lout = l1 + 1 + l2
-      istr = case tkType t1 of
-               EndParaToken -> "\n" -- note: b1 will end with \n so only need 1
-               GeneralToken -> " " 
-
-  in (lout, b1 <> istr <> b2)
-
+addToken orig (EndParaToken,EndParaToken) = orig
+addToken (l1,b1) (_,EndParaToken) = (l1 + 2, b1 <> "\n\n")
+addToken (l1,b1) (TextToken _,TextToken t2) = (l1 + l2, b1 <> " " <> b2)
+  where
+    l2 = 1 + T.length t2
+    b2 = TB.fromText t2
+addToken (l1,b1) (_,TextToken t2) = (l1 + l2, b1 <> b2)
+  where
+    l2 = T.length t2
+    b2 = TB.fromText t2
+  
 -- Stop the chain if the word takes the total length past the
 -- input len. As a simplification, the check is not applied
 -- to the starting pair.
