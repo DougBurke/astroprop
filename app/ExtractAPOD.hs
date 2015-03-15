@@ -113,25 +113,39 @@ findText allTags =
 
 -- | Try and provide nice formatting to the text.
 --
---   Can I jut process tokens individually, or is
---   some sort of state machine needed?
---   Also, is this any different from
---      innerText . findTextTags
---   ? At the moment, I don't think it is.
+--   Now, the way that the APOD pages are written means
+--   that a simple removal of tags results in many
+--   apparent paragraphs when they are not rendered
+--   as such (because the pages do not use p or div
+--   tags). Are there any multi-paragraph descriptions?
 --
 combineTags :: [Tag T.Text] -> LT.Text
 combineTags = go mempty
   where 
-    -- At the moment this is just foldl'/filter.
-    -- Should I note TagOpen for "non expected" tags
+    -- Could do this with: foldl' and filter.
+    --
     go b [] = LB.toLazyText b
-    go b (TagText t:xs) = go (b <> LB.fromText t) xs
+    go b (TagText t:xs) = go (b <> LB.fromText (cleanText t)) xs
+
+    -- Should I note TagOpen for "non expected" tags; I am not
+    -- sure if there are any "important" para tags in the APOD
+    -- descriptions
+    --
+    go b (TagOpen to _:xs) | to == pTag = go (b <> newLine) xs 
+                           | otherwise  = go b xs
+
     go b (_:xs) = go b xs
 
-{-
-findText :: [Tag T.Text] -> T.Text
-findText = innerText . drop 1 . findTextTags
--}
+-- There's a few ways of doing this, but let's just try removing
+-- blank lines.
+cleanText :: T.Text -> T.Text
+cleanText = T.replace (T.pack "\n\n") (T.pack "\n")
+
+pTag :: T.Text
+pTag = T.pack "p"
+
+newLine :: LB.Builder
+newLine = LB.singleton '\n' <> LB.singleton '\n'
 
 -- | Extract the relevant text parts of the APOD HTML page
 --   stored in the input file.
