@@ -241,7 +241,7 @@ tokenize txt =
       t2 = tokenizePara EndToken 
   in case makeParas txt of
     [] -> []
-    (x:xs) -> concat (t2 x : map t1 xs)
+    (x:xs) -> concat (reverse (t2 x : map t1 xs))
 
 -- | Split up a string into a list of paragraphs, indicated by having
 --   one or more blank lines separating text.
@@ -272,10 +272,8 @@ groupParas (c,ps) l
   | T.null l  = ([], if null c then ps else c:ps)
   | otherwise = (if null c then [l] else l:c, ps)
 
--- This reverses the order of the paragraphs, but not the paragraph
--- contents. As the paragraphs are treated as separate chunks this
--- should not be a problem.
---
+-- | It's important that this returns a revsed list of paragraphs,
+--   to make tokenize easier.
 makeParas :: T.Text -> RevParas
 makeParas txt = 
   let stxt = T.strip txt
