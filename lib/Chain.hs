@@ -12,7 +12,7 @@ At present it uses an order 2 chain, using "words" as the token type. It
 is designed for English text; for languages with not too disimilar
 character classes it should be okay, but it is not going to support
 all languages. It has very-limited discrimination of tokens, basically
-only end-of-paragraph.
+only end-of-paragraph/end-of-text.
 
 There is no support for versioning data; that is, the file saved by
 writeMarkov is not guaranteed to be read in by a later version of
@@ -28,16 +28,6 @@ TODO:
 
   - It would be nice if the chain could be cut off at the end of a
     sentence (for those inputs that have sentence-like structure).
-
-  - Switch the token type to be a union type, such as
-
-      TokenText T.Text | StartPara | EndPara
-
-    That is, treat the "punctuation" as separate tokens.
-
-    At present, the fact that multiple paragraphs are supported is
-    somewhat of a fluke, and I wonder if the above formulation would
-    make support a bit clearer.
 
 -}
 
@@ -111,7 +101,7 @@ import System.Random (mkStdGen)
 --   Comparison is "exact", in the sense that \"foo\" and \"Foo\"
 --   are different.
 --
-data Token = TextToken T.Text | EndParaToken
+data Token = TextToken T.Text | EndParaToken | EndToken
   deriving (Eq, Ord, Generic)
 
 toToken :: T.Text -> Maybe Token
@@ -119,20 +109,24 @@ toToken t | T.null t  = Nothing
           | otherwise = Just (TextToken t)
 
 fromToken :: Token -> T.Text
+fromToken EndToken      = ""
 fromToken EndParaToken  = "\n\n"
 fromToken (TextToken t) = t
 
 dumpToken :: Token -> T.Text
+dumpToken EndToken      = "\\n"
 dumpToken EndParaToken  = "\\n\\n"
 dumpToken (TextToken t) = t
 
 lenToken :: Token -> Int
+lenToken EndToken      = 0
 lenToken EndParaToken  = 2
 lenToken (TextToken t) = T.length t
 
 -- Since tokens can not be empty, this should be okay.
 instance Hashable Token where
-  hashWithSalt s EndParaToken  = hashWithSalt s T.empty
+  hashWithSalt s EndToken      = hashWithSalt s T.empty
+  hashWithSalt s EndParaToken  = hashWithSalt s (T.pack "\n\n")
   hashWithSalt s (TextToken t) = hashWithSalt s t
 
 -- Hand roll a simple Markov generator. I use a slightly
@@ -140,6 +134,8 @@ instance Hashable Token where
 -- it; as the code is currently written this seems an
 -- unnescessary optimisation.
 --
+-- It would be nice to recognize that a key with the
+-- first element being EndToken is invalid.
 type Key = (Token, Token)
 
 type TransitionMap = M.HashMap Token Int
@@ -239,39 +235,61 @@ instance Serialize Markov
 --
 --    - a blank line separates paragraphs
 --
---    - the last token is forced to mark 'end paragraph'; perhaps it
---      should be 'end text'?
---
 tokenize :: T.Text -> [Token]
-tokenize txt = concatMap tokenizePara (makeParas txt)
+tokenize txt =
+  let t1 = tokenizePara EndParaToken
+      t2 = tokenizePara EndToken 
+  in case makeParas txt of
+    [] -> []
+    (x:xs) -> concat (t2 x : map t1 xs)
 
 -- | Split up a string into a list of paragraphs, indicated by having
 --   one or more blank lines separating text.
 --
---   The grouping works with reversed lists.
+--   The grouping works with reversed lists. For now I just use type
+--   synonymns to avoid constructing/deconstructing types, but
+--   really should use a newtype to provide type safety.
 --
 type Para = [T.Text]
 
-groupParas :: (Para,[Para]) -> T.Text -> (Para,[Para])
-groupParas (c,ps) l = if T.null l
-                      then ([], if null c then ps else c:ps)
-                      else (if null c then [l] else l:c, ps)
+-- RevPara
+--   lines of the paragraph are reversed but the lines themselves are correct
+-- RevParas
+--   paragraphs are in reverse order but the paras are correct
+-- R2Paras
+--   paragraphs are in reverse order, and lines of paragraphs are reversed
+--   
+type RevPara = Para
+type RevParas = [Para]
+type R2Paras = [RevPara]
+
+-- A list of paragraphs that have been placed in reversed order,
+-- such as para3, para2, para1, but where the contents of each
+-- paragraph is ordered correctly.
+--
+groupParas :: (RevPara,R2Paras) -> T.Text -> (RevPara,R2Paras)
+groupParas (c,ps) l
+  | T.null l  = ([], if null c then ps else c:ps)
+  | otherwise = (if null c then [l] else l:c, ps)
 
 -- This reverses the order of the paragraphs, but not the paragraph
 -- contents. As the paragraphs are treated as separate chunks this
 -- should not be a problem.
-makeParas :: T.Text -> [Para]
+--
+makeParas :: T.Text -> RevParas
 makeParas txt = 
-  let (pl,ps) = foldl' groupParas ([],[]) (map T.strip (T.lines txt))
+  let stxt = T.strip txt
+      (pl,ps) = foldl' groupParas ([],[]) (map T.strip (T.lines stxt))
   in map reverse (pl:ps)
 
 -- Probably not very efficient.
-tokenizePara :: Para -> [Token]
-tokenizePara ps = 
+--
+tokenizePara :: Token -> Para -> [Token]
+tokenizePara lastToken ps = 
   let ws = concatMap T.words ps
   in case reverse ws of
     [] -> []
-    (x:xs) -> reverse $ catMaybes $ Just EndParaToken : toToken x : map toToken xs
+    xs -> reverse $ catMaybes $ Just lastToken : map toToken xs
 
 addTriple :: MarkovBuild -> (Token,Token,Token) -> MarkovBuild
 addTriple m (f,s,w) = 
@@ -306,7 +324,7 @@ initialize = foldl' addTokens M.empty
 --   a \""starting pair\" includes:
 --
 --      - first token is capitalized
---      - both tokens are not EndParaToken
+--      - both tokens are text
 --
 convert :: MarkovBuild -> Maybe Markov
 convert m = do
@@ -373,6 +391,7 @@ buildChain maxlen m orig start@(_,stok) =
 -- Work out how to combine the next token with the current builder.
 -- 
 addToken :: Builder -> Key -> Builder
+addToken orig (_,EndToken) = orig
 addToken orig (EndParaToken,EndParaToken) = orig
 addToken (l1,b1) (_,EndParaToken) = (l1 + 2, b1 <> "\n\n")
 addToken (l1,b1) (TextToken _,TextToken t2) = (l1 + l2, b1 <> " " <> b2)
@@ -474,8 +493,29 @@ getSeed = do
 infoMarkov :: Markov -> [(String, Int)]
 infoMarkov mv = 
   let m = mvMap mv
+      -- count number of end-para (n1) and end (n2) tokens;
+      -- do not want to "double count" end-para, so ignore
+      -- any keys that start with EndParaToken.
+      --
+      -- nend should be 0; i.e. EndToken should only occur
+      -- as a transition.
+      ctr (n1,n2) (_,EndToken) = (n1,n2+1)
+      ctr (n1,n2) (_,EndParaToken) = (n1+1,n2)
+      ctr orig _ = orig
+      (nep,nend) = foldl' ctr (0,0) (M.keys m)
+
+      countEnd c ts = 
+        let xs = filter (isEnd . fst) (NE.toList ts)
+            isEnd EndToken = True
+            isEnd _ = False
+        in c + length xs
+      n = M.foldl' countEnd 0 m
+
   in [ ("Number of keys", M.size m)
      , ("Number of start keys", NE.length (mvStart mv))
+     , ("Number of end-para keys", nep)
+     , ("Number of end keys (should be 0)", nend)
+     , ("Number of end transitions", n)
      ]
 
 -- | Report some basic information on the overlap between the two chains.
