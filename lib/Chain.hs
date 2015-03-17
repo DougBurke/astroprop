@@ -62,17 +62,16 @@ module Chain
 
 import qualified Control.Monad.Random as R
 
-import qualified Data.ByteString.Lazy as LB
-
 -- I have done no profiling to see whether it's worth skipping
 -- the default Map and jumping to unordered-containers. I just
 -- did it.
 --
+import qualified Data.ByteString.Lazy as LB
+import qualified Data.Foldable as Fold
 import qualified Data.HashMap.Strict as M
 import qualified Data.HashSet as S
-
 import qualified Data.List.NonEmpty as NE
-
+import qualified Data.Sequence as Seq
 import qualified Data.Text as T
 import qualified Data.Text.Encoding as TE
 import qualified Data.Text.Lazy as LT
@@ -83,7 +82,7 @@ import Control.Arrow (second)
 import Data.Char (isUpper)
 import Data.Hashable (Hashable(..))
 import Data.List (foldl')
-import Data.Maybe (catMaybes)
+import Data.Maybe (mapMaybe)
 import Data.Ratio (numerator, denominator)
 import Data.Semigroup
 import Data.Serialize
@@ -237,57 +236,60 @@ instance Serialize Markov
 --
 tokenize :: T.Text -> [Token]
 tokenize txt =
-  let t1 = tokenizePara EndParaToken
-      t2 = tokenizePara EndToken 
-  in case makeParas txt of
-    [] -> []
-    (x:xs) -> concat (reverse (t2 x : map t1 xs))
+  let tpara = tokenizePara EndParaToken
+      epara = tokenizePara EndToken
+  in case Seq.viewr (makeParas txt) of
+    Seq.EmptyR  -> []
+    ps Seq.:> p -> 
+      let ts = fmap tpara ps
+          es = epara p
+          xs = ts Seq.|> es
+
+          toL :: Seq.Seq a -> [a]
+          toL = Fold.foldr (:) []
+
+          ys :: Seq.Seq [Token]
+          ys = fmap toL xs
+
+      in concat (toL ys)
+
+type Para = Seq.Seq Token
+type Paras = Seq.Seq Para
 
 -- | Split up a string into a list of paragraphs, indicated by having
 --   one or more blank lines separating text.
 --
---   The grouping works with reversed lists. For now I just use type
---   synonymns to avoid constructing/deconstructing types, but
---   really should use a newtype to provide type safety.
---
-type Para = [T.Text]
-
--- RevPara
---   lines of the paragraph are reversed but the lines themselves are correct
--- RevParas
---   paragraphs are in reverse order but the paras are correct
--- R2Paras
---   paragraphs are in reverse order, and lines of paragraphs are reversed
---   
-type RevPara = Para
-type RevParas = [Para]
-type R2Paras = [RevPara]
-
--- A list of paragraphs that have been placed in reversed order,
--- such as para3, para2, para1, but where the contents of each
--- paragraph is ordered correctly.
---
-groupParas :: (RevPara,R2Paras) -> T.Text -> (RevPara,R2Paras)
+groupParas :: (Para, Paras) -> T.Text -> (Para, Paras)
 groupParas (c,ps) l
-  | T.null l  = ([], if null c then ps else c:ps)
-  | otherwise = (if null c then [l] else l:c, ps)
+  | T.null l  = (Seq.empty, ps Seq.|> c)
+  | otherwise = 
+    let ws = T.words l
+        ts = Seq.fromList (mapMaybe toToken ws)
+    in (c Seq.>< ts, ps)
 
--- | It's important that this returns a revsed list of paragraphs,
---   to make tokenize easier.
-makeParas :: T.Text -> RevParas
-makeParas txt = 
-  let stxt = T.strip txt
-      (pl,ps) = foldl' groupParas ([],[]) (map T.strip (T.lines stxt))
-  in map reverse (pl:ps)
-
--- Probably not very efficient.
+-- It seems a bit pointless to append on the last paragraph when
+-- the called is just going to remove it. So, could return
+-- Maybe (Paras, Para)
 --
-tokenizePara :: Token -> Para -> [Token]
-tokenizePara lastToken ps = 
-  let ws = concatMap T.words ps
-  in case reverse ws of
-    [] -> []
-    xs -> reverse $ catMaybes $ Just lastToken : map toToken xs
+makeParas :: T.Text -> Paras
+makeParas txt =
+  let stxt = T.strip txt
+      ts = map T.strip (T.lines stxt)
+      (pl,ps) = foldl' groupParas (Seq.empty,Seq.empty) ts
+  in case ts of
+       [] -> Seq.empty
+       _  -> ps Seq.|> pl 
+
+-- Now, Para is just Seq.Seq Token, but use different
+-- representations in the signature to indicate that
+-- there's a slight difference (in that, as written,
+-- Para only has TextToken but the output has
+-- more types of tokens).
+-- 
+tokenizePara :: Token -> Para -> Seq.Seq Token
+tokenizePara lastToken ps 
+  | Seq.null ps = Seq.empty
+  | otherwise   = ps Seq.|> lastToken
 
 addTriple :: MarkovBuild -> (Token,Token,Token) -> MarkovBuild
 addTriple m (f,s,w) = 
