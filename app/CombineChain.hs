@@ -19,6 +19,9 @@ import qualified Chain as C
 import qualified Data.List.NonEmpty as NE
 import qualified Data.Semigroup as S
 
+import Data.Functor ((<$>))
+import Data.Monoid ((<>))
+
 import Options.Applicative
 
 import System.Environment (getProgName)

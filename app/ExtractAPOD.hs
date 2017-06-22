@@ -1,5 +1,3 @@
-{-# LANGUAGE CPP #-}
-
 -- do not use OverloadedStrings as this interacts with
 -- the StringLike type class from TagSoup
 
@@ -34,9 +32,8 @@ import qualified Data.Text.Lazy.Builder as LB
 
 import Control.Monad (when)
 
-#if (!defined(__GLASGOW_HASKELL__)) || (__GLASGOW_HASKELL__ < 710)
-import Data.Monoid (mempty)
-#endif
+import Data.Functor ((<$>))
+import Data.Monoid ((<>))
 
 import Options.Applicative
 

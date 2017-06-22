@@ -22,7 +22,7 @@ It requires that you have a [API key](https://github.com/adsabs/adsabs-dev-api)
 stored in the file `dev_key.txt` (in the current working directory).
 
 ~~~~
-% ./dist/build/getproposals/getproposals -help
+% stack exec getproposals -- --help
 getproposals - grab proposal abstracts and titles from ADS.
 
 Usage: getproposals telescope outdir [--start ARG] [--nrows ARG]
@@ -43,9 +43,16 @@ The output is written to `outdir/<bibcode>.title` and
 
 Multiple calls will be required, and I suggest increasing the value
 of the `--nrows` option. Your limits on how many items can be queried
-at a single time can be found by querying
+at a single time can be found with a query like
 
-    http://adslabs.org/adsabs/api/settings/?dev_key=...
+~~~~
+% curl -v -H "Authorization: Bearer:<token>" \
+    'https://api.adsabs.harvard.edu/v1/search/query?q=star'
+~~~~
+
+and then looking for the `X-RateLimit-***` values, where `date -r <time>`
+or `date --date "@<time>"` will convert the UNIX timestamp to a
+readable value.
 
 # Getting the data: APOD
 
@@ -62,14 +69,14 @@ The following will download 10 pages to the directory apod/html/,
 creating it if necessary.
 
 ~~~~
-% ./dist/build/getapod/getapod apod/html --npages 10
+% stack exec getapod apod/html --npages 10
 ~~~~
 
 To use a local index file:
 
 ~~~~
-% ./dist/build/getapod/getapod apod/html --index apod/index.html
-% ./dist/build/getapod/getapod apod/html --index apod/index.html
+% stack exec getapod apod/html --index apod/index.html
+% stack exec getapod apod/html --index apod/index.html
 ~~~~
 
 The first call downloads the index file, processes it, and then
@@ -83,7 +90,7 @@ The APOD files can be converted to text form using `extractapod`.
 
 Once the data is written somewhere - e.g. after
 
-    getproposals cxo..prop cxo
+    stack exec getproposals cxo..prop cxo
 
 then the `gibberish` program can be used to create the random text.
 This is useful for one-shot use; if you are going to want to create
@@ -92,7 +99,7 @@ they're not actually that funny), then the `makechain` and `runchain`
 executables, described below, can be used.
 
 ~~~~
-% ./dist/build/gibberish/gibberish --help
+% stack exec gibberish -- --help
 gibberish - create a Markov chain of gibberish.
 
 Usage: gibberish glob [--nchar ARG] [--seed ARG]
@@ -107,7 +114,7 @@ Available options:
 As an example, if `getproposals` were run with an `outdir` of `cxo`, then
 
 ~~~~
-% ./dist/build/gibberish/gibberish cxo/\*title
+% stack exec gibberish cxo/\*title
 Seed: 359276481432
 Unidentified X-ray Sources in the X-ray Death of Intermediate Mass Black Holes and Understanding Star Formation
 ~~~~
@@ -121,7 +128,7 @@ The `makechain` executable will parse a set of text files, and create
 a chain file:
 
 ~~~~
-% ./dist/build/makechain/makechain cxo/\*title cxo.title.chain
+% stack exec makechain cxo/\*title cxo.title.chain
 Reading files: cxo/*title
 Writing chain: cxo.title.chain
 ~~~~
@@ -130,7 +137,7 @@ The `runchain` executable uses that chain file to create the
 gibberish:
 
 ~~~~
-% ./dist/build/runchain/runchain cxo.title.chain
+% stack exec runchain cxo.title.chain
 Seed: 138596064503
 Matter Galaxy in the core of the Standard Candles Cas A and G21.5-09.
 ~~~~
@@ -154,22 +161,20 @@ The `combinechain` executable combines multiple chains (please excuse
 the odd argument order):
 
 ~~~~
-% ./dist/build/combinechain/combinechain newchain chain1 ... chainn
+% stack exec combinechain newchain chain1 ... chainn
 ~~~~
 
 # Building the tools
 
-You'll need a Haskell compiler - it has only been tested with
-version `7.8.4` of [ghc](https://www.haskell.org/ghc/) - and
-I suggest using the sandbox feature of
-[cabal](https://www.haskell.org/cabal/) to build. That is
+The code is written in Haskell and is built and tested with
+[ghc](https://www.haskell.org/ghc/) using
+[stack](https://www.haskellstack.org/). Once `stack` has been
+installed you should be able to say
 
 ~~~~
 % git pull https://github.com/DougBurke/astroprop.git
 % cd astroprop
-% cabal sandbox init
-% cabal install --only-dependencies
-% cabal build
+% stack build
 ~~~~
 
 It is developed and tested on a Linux system.

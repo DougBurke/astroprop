@@ -35,7 +35,9 @@ import qualified System.IO.Strict as S
 
 import Control.Monad (filterM)
 
+import Data.Functor ((<$>))
 import Data.Maybe (mapMaybe)
+import Data.Monoid ((<>))
 
 import Options.Applicative
 
@@ -110,7 +112,7 @@ findIndexPage _ mgr = readIndexPage mgr >>= \cts -> return (cts, NoAction)
 
 readIndexPage :: Manager -> IO String
 readIndexPage mgr = do
-  req <- parseUrl "http://apod.nasa.gov/apod/archivepix.html"
+  let req = parseRequest_ "http://apod.nasa.gov/apod/archivepix.html"
   -- not streaming here!
   LB8.unpack <$> withHTTP req mgr (PB.toLazyM . responseBody)
 
@@ -153,7 +155,7 @@ findPages cts =
 downloadPage :: FilePath -> Manager -> String -> IO ()
 downloadPage odir mgr apath = do
   putStrLn ("Downloading: " ++ apath)
-  req <- parseUrl ("http://apod.nasa.gov/apod/" ++ apath)
+  req <- parseRequest ("http://apod.nasa.gov/apod/" ++ apath)
   withHTTP req mgr $ \resp -> do
     let oname = odir </> apath
     withFile oname WriteMode $ \oh ->
@@ -171,18 +173,18 @@ runSearch :: Args -> IO ()
 runSearch args = do
   let out = outdirArg args
   createDirectoryIfMissing True out
-  withManager defaultManagerSettings $ \mgr -> do
-    (indexPage, act) <- findIndexPage (indexArg args) mgr
-    let allPages = findPages indexPage
-    putStrLn ("Found " ++ show (length allPages) ++ " pages from APOD.")
+  mgr <- newManager defaultManagerSettings
+  (indexPage, act) <- findIndexPage (indexArg args) mgr
+  let allPages = findPages indexPage
+  putStrLn ("Found " ++ show (length allPages) ++ " pages from APOD.")
 
-    missingPages <- findMissing out allPages
-    putStrLn ("There are " ++ show (length missingPages) ++ " missing pages.")
+  missingPages <- findMissing out allPages
+  putStrLn ("There are " ++ show (length missingPages) ++ " missing pages.")
 
-    mapM_ (downloadPage out mgr) (take (npagesArg args) missingPages)
+  mapM_ (downloadPage out mgr) (take (npagesArg args) missingPages)
 
-    case act of
-      NoAction -> return ()
-      SaveFile fname cts -> writeFile fname cts
-                            >> putStrLn ("Saved APOD index to: " ++ fname)
+  case act of
+    NoAction -> return ()
+    SaveFile fname cts -> writeFile fname cts
+                          >> putStrLn ("Saved APOD index to: " ++ fname)
 

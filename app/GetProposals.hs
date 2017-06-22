@@ -44,6 +44,10 @@ import Data.Aeson (FromJSON(..)
                    , Value(..)
                    , (.:), (.:?)
                    , json')
+import Data.Functor ((<$>))
+import Data.Monoid ((<>))
+
+import Network.HTTP.Client.TLS (tlsManagerSettings)
 
 import Options.Applicative
 
@@ -126,28 +130,48 @@ main = do
     Left emsg -> putStrLn $ "ERROR: " ++  emsg
     Right key -> runSearch args key
 
+{-
+
+The response to
+
+curl -H "Authorization: Bearer:<token>" "https://api.adsabs.harvard.edu/v1/search/query?q=bibstem:cxo..prop&start=0&rows=1"
+
+is
+
+{"responseHeader":{"status":0,"QTime":1,"params":{"q":"bibstem:cxo..prop","fl":"id","start":"0","rows":"1","wt":"json"}},"response":{"numFound":4441,"start":0,"docs":[{"id":"1163659"}]}}
+
+-}
+
 runSearch :: Args -> ADSKey -> IO ()
 runSearch args key = do
-  req <- parseUrl "http://adslabs.org/adsabs/api/search/"
-  let req' = setQueryString qopts req 
+  let req = parseRequest_ "https://api.adsabs.harvard.edu/v1/search/query"
+
+      -- add in ADS authorization
+      ohdrs = requestHeaders req
+      authorize = ("Authorization", "Bearer:" <> keyBS)
+      keyBS = B8.pack (_adsKey key)
+      nhdrs = authorize : ohdrs
+      req1 = req { requestHeaders = nhdrs }
+
+      req2 = setQueryString qopts req1 
       qopts = [ ("q", Just bibstemBS)
               , ("start", Just startBS)
               , ("rows", Just rowBS)
-              , ("dev_key", Just keyBS)
               ]
-      keyBS = B8.pack $ _adsKey key
       startBS = B8.pack $ show (start args)
       rowBS = B8.pack $ show (nrows args)
       bibstemBS = B8.pack $ "bibstem:" ++ telescope args
 
   createDirectoryIfMissing True (outdir args)
-  withManager defaultManagerSettings $ \mgr ->
-    withHTTP req' mgr $ \resp -> do
-      mres <- evalStateT (parse json') (responseBody resp)
-      case mres of
-        Just (Right json) -> writeResponses (outdir args) json
-        Just (Left pe) -> putStrLn ("Failed parsing: " ++ show pe)
-        _ -> putStrLn "Failed somewhere"
+
+  -- is this sufficient to get TLS working?
+  mgr <- newManager tlsManagerSettings
+  withHTTP req2 mgr $ \resp -> do
+    mres <- evalStateT (parse json') (responseBody resp)
+    case mres of
+      Just (Right json) -> writeResponses (outdir args) json
+      Just (Left pe) -> putStrLn ("Failed parsing: " ++ show pe)
+      _ -> putStrLn "Failed somewhere"
 
 writeResponses :: FilePath -> Value -> IO ()
 writeResponses odir json = 

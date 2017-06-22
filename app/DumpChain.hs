@@ -26,6 +26,8 @@ import qualified Data.Text.IO as T
 import qualified Chain as C
 
 import Data.Ratio (numerator)
+import Data.Functor ((<$>))
+import Data.Monoid ((<>))
 
 import Options.Applicative
 

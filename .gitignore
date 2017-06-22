@@ -1,8 +1,11 @@
 dev_key.txt
+
 *~
 .cabal-sandbox/
 cabal.sandbox.config
 dist/
+.stack-work/
+
 cxo/
 hst/
 *.chain

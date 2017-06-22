@@ -21,6 +21,9 @@ import qualified Data.Text.IO as T
 
 import qualified Chain as C
 
+import Data.Functor ((<$>))
+import Data.Monoid ((<>))
+
 import Options.Applicative
 
 import System.Environment (getProgName)
