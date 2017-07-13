@@ -27,6 +27,12 @@ Aim:
   Your ADS API key must be stored in the file dev_key.txt in the
   current working directory when the tool is run.
 
+Example ADS/API output:
+
+% curl -H "Authorization: Bearer:<magic token>" "https://api.adsabs.harvard.edu/v1/search/query?q=bibstem:cxo..prop&start=1&rows=1&fl=abstract,bibcode,author,data,doi,keyword,orcid_pub,orcid_user,orcid_other,title,vizier"
+{"responseHeader":{"status":0,"QTime":42,"params":{"q":"bibstem:cxo..prop","fl":"abstract,bibcode,author,data,doi,keyword,orcid_pub,orcid_user,orcid_other,title,vizier","start":"1","rows":"1","wt":"json"}},"response":{"numFound":4441,"start":1,"docs":[{"title":["ACIS Observations of Jupiter"],"abstract":"The intent of these 4 ACIS observations of Jupiter is to investigate the best strategy for carrying out solar system observations which are complicated by the sensitivity of the ACIS-S array to red light. The first of these observations will aquire a bias map with Jupiter outside of the field of view of ACIS-S. The following three observations will be carried out with different instrument settings (primarly the event and split thresholds) and no bias map. A slew must be perfomed between all four observations to locate Jupiter on the detector since it will drift during the required 3 ksec exposures. The exact pointings will be filled in at a later time once the the observing date is known.","data":["CXO"],"bibcode":"2000cxo..prop..720C","keyword":["Chandra Proposal ID #02108032"],"author":["CXC Calibration"],"orcid_pub":["-"]}]}}
+
+
 -}
 
 module Main where
@@ -130,17 +136,6 @@ main = do
     Left emsg -> putStrLn $ "ERROR: " ++  emsg
     Right key -> runSearch args key
 
-{-
-
-The response to
-
-curl -H "Authorization: Bearer:<token>" "https://api.adsabs.harvard.edu/v1/search/query?q=bibstem:cxo..prop&start=0&rows=1"
-
-is
-
-{"responseHeader":{"status":0,"QTime":1,"params":{"q":"bibstem:cxo..prop","fl":"id","start":"0","rows":"1","wt":"json"}},"response":{"numFound":4441,"start":0,"docs":[{"id":"1163659"}]}}
-
--}
 
 runSearch :: Args -> ADSKey -> IO ()
 runSearch args key = do
@@ -153,10 +148,16 @@ runSearch args key = do
       nhdrs = authorize : ohdrs
       req1 = req { requestHeaders = nhdrs }
 
+      -- Note: the keyword field is expected to contain
+      -- "Chandra Proposal ID #<n>".
+      --
+      fieldNames = "title,abstract,bibcode,keyword,author"
+  
       req2 = setQueryString qopts req1 
       qopts = [ ("q", Just bibstemBS)
               , ("start", Just startBS)
               , ("rows", Just rowBS)
+              , ("fl", Just fieldNames)
               ]
       startBS = B8.pack $ show (start args)
       rowBS = B8.pack $ show (nrows args)
@@ -197,28 +198,25 @@ writeResponse odir (ADSEntity bibCode title mabstract) = do
   
 {-
 
-The ADS JSON response is expected to look like
+The ADS JSON response is expected to look like (fl and returned fields may be
+slightly different)
 
-{  "meta": {"api-version": "0.1.1", "count": 1, "hits": 4727, "qtime": 80, "query": "bibstem:cxo"}, 
-  "results": 
-    {"docs": 
-     [
-      {"bibcode": "2014cxo..prop.4536C", "pubdate": "2014-09-00", "author": ["Canizares, Claude"], "abstract": "The direct measurement of an unbiased and Si K edge optical depth and possible structure in the absorption regime between 1021 and 1022 cm-2 is complex and difficult and needs a specific instrument setup. We therefore propose a 135 ksec observation of Ser X-1 in TE mode and a very tight subarray of 134 rows and only two grating arm on the array. For this only the S3 and S2 devices need to be on and we cover the Si K edge on S3, which as a back-illuminated device is devoid of instrumental edge contributions.", "database": ["astronomy"], "pub": "Chandra Proposal", "[citations]": {"num_citations": 0, "num_references": 0}, "property": ["NONARTICLE", "NOT REFEREED"], "aff": ["-"], "year": "2014", "title": ["Measure an unbiased Si K edge optical depth in Ser X-1"], "identifier": ["2014cxo..prop.4536C"], "id": "2058457", "page": ["4536"]
-      }
-     ]
-    }
-}
+{
+  "responseHeader": {
+    "status":0, "QTime":42, "params":{"q":"bibstem:cxo..prop","fl":"abstract,bibcode,author,data,doi,keyword,orcid_pub,orcid_user,orcid_other,title,vizier","start":"1","rows":"1","wt":"json"}
+  },
+  "response": {
+    "numFound":4441,
+    "start":1,
+    "docs":[ {
+      "title":["ACIS Observations of Jupiter"],
+      "abstract":"The intent of these 4 ACIS observations of Jupiter is to investigate the best strategy for carrying out solar system observations which are complicated by the sensitivity of the ACIS-S array to red light. The first of these observations will aquire a bias map with Jupiter outside of the field of view of ACIS-S. The following three observations will be carried out with different instrument settings (primarly the event and split thresholds) and no bias map. A slew must be perfomed between all four observations to locate Jupiter on the detector since it will drift during the required 3 ksec exposures. The exact pointings will be filled in at a later time once the the observing date is known.",
+      "data":["CXO"],
+      "bibcode":"2000cxo..prop..720C",
+      "keyword":["Chandra Proposal ID #02108032"],
+      "author":["CXC Calibration"],
+      "orcid_pub":["-"]}]}}
 
-So, we want to extract the docs field of the results entry,
-and parse as an array of objects, extracting the bibcode, abstact, and title
-values.
-
-  bibcode is a string
-  abstract is a string
-  title is an array: why?
-
-Could look at the meta.count field and check not 0.
- 
 -}
 
 -- | Represent a single abstract/record.
@@ -244,7 +242,7 @@ data ADSResponse = ADSResponse { adsEntities :: [ADSEntity] }
 
 instance FromJSON ADSResponse where
   parseJSON (Object o) = do
-    docs <- o .: "results" >>= (.: "docs")
+    docs <- o .: "response" >>= (.: "docs")
     ADSResponse <$> parseJSON docs
   
   parseJSON _ = mzero
